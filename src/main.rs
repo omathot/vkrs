@@ -1,71 +1,19 @@
 use ash::{Entry, Instance, vk};
+use common::*;
 use std::ffi::{CStr, CString};
 use std::time::Instant;
 use std::{error::Error, result::Result};
-use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowAttributes};
+use winit::event_loop::{ControlFlow, EventLoop};
+use winit::window::Window;
+mod common;
 mod utils;
-
-#[cfg(debug_assertions)]
-static ENABLE_VALIDATION_LAYERS: bool = true;
-#[cfg(not(debug_assertions))]
-static ENABLE_VALIDATION_LAYERS: bool = false;
-
-static VALIDATION_LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
+mod window;
 
 struct Application {
 	instance: Option<Instance>,
 	window: Option<Window>,
 
 	last_frame: Instant,
-}
-impl ApplicationHandler for Application {
-	// Init our graphics context on resumed because of certain platforms
-	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-		if self.instance.is_none() {
-			init_vulkan(self);
-		}
-		if self.window.is_none() {
-			let attributes = WindowAttributes::default().with_title("Vulkan rs");
-			self.window = Some(
-				event_loop
-					.create_window(attributes)
-					.expect("Should have been able to create window from event loop"),
-			);
-		}
-	}
-	fn suspended(&mut self, event_loop: &ActiveEventLoop) {}
-	fn window_event(
-		&mut self,
-		event_loop: &ActiveEventLoop,
-		window_id: winit::window::WindowId,
-		event: WindowEvent,
-	) {
-		match event {
-			WindowEvent::CloseRequested => {
-				self.cleanup();
-				event_loop.exit();
-			}
-			WindowEvent::Resized(size) => { /* resize */ }
-			WindowEvent::RedrawRequested => {
-				// tick
-				let now = Instant::now();
-				let dt = now.duration_since(self.last_frame).as_secs_f32();
-				self.last_frame = now;
-
-				// game logic
-				self.update(dt);
-				// render
-				self.render();
-				if let Some(window) = &self.window {
-					window.request_redraw();
-				}
-			}
-			_ => {}
-		}
-	}
 }
 
 impl Application {
@@ -80,64 +28,115 @@ impl Application {
 	fn update(&self, dt: f32) {}
 	fn render(&self) {}
 	fn cleanup(&mut self) {}
-}
 
-fn create_instance() -> Result<Instance, vk::Result> {
-	let entry = Entry::linked();
-	let extensions = unsafe {
-		entry
-			.enumerate_instance_extension_properties(None)
-			.expect("Should have been able to get instance extension properties")
-	};
+	fn create_instance() -> Result<Instance, vk::Result> {
+		let entry = Entry::linked();
+		#[cfg(debug_assertions)]
+		{
+			// query all extensions
+			let available_extensions = unsafe {
+				entry
+					.enumerate_instance_extension_properties(None)
+					.expect("Should have been able to get instance extension properties")
+			};
+			log::info!("{} available extensions:", available_extensions.len());
+			available_extensions.iter().for_each(|extension| {
+				log::info!("\t{:?}", extension.extension_name_as_c_str().unwrap())
+			});
+			println!("");
+		}
 
-	// query extensions
-	log::info!("{} available extensions:", extensions.len());
-	for extension in extensions {
-		log::info!("\t{:?}", extension.extension_name_as_c_str().unwrap());
+		// make required layers
+		let required_layers = Application::get_required_layers(&entry);
+
+		// make required extensions
+		let required_extensions: CStringArray = Application::get_required_extensions();
+
+		let app_info = vk::ApplicationInfo {
+			application_version: vk::make_api_version(0, 1, 0, 0),
+			api_version: vk::make_api_version(0, 1, 4, 0),
+			..Default::default()
+		};
+		let create_info = vk::InstanceCreateInfo {
+			p_application_info: &app_info,
+			enabled_layer_count: required_layers.len() as u32,
+			pp_enabled_layer_names: required_layers.as_ptr(),
+			enabled_extension_count: required_extensions.len() as u32,
+			pp_enabled_extension_names: required_extensions.as_ptr(),
+			..Default::default()
+		};
+
+		let instance = unsafe { entry.create_instance(&create_info, None)? };
+		Ok(instance)
 	}
-	println!("");
-	let layer_properties = unsafe {
-		entry
-			.enumerate_instance_layer_properties()
-			.expect("Should have been able to get layer properties from entry")
-	};
-	log::info!(
-		"{} available instance layer properties:",
-		layer_properties.len()
-	);
-	layer_properties
-		.iter()
-		.for_each(|property| log::info!("\t{:?}", property.layer_name_as_c_str().unwrap()));
-	let mut required_layers: Vec<&str> = Vec::new();
-	if ENABLE_VALIDATION_LAYERS {
-		required_layers.extend(VALIDATION_LAYERS.iter());
+
+	pub fn init_vulkan(&mut self) {
+		self.instance =
+			Some(Application::create_instance().expect("Should have been able to create instance"));
 	}
-	if required_layers.iter().any(|required_layer| {
-		let cstr_name = CString::new(*required_layer)
-			.expect("Should have been able to create CString from required layer name");
-		!layer_properties
+
+	fn get_required_extensions() -> CStringArray {
+		let mut extension_names = WL_REQUIRED_EXTENSIONS.to_vec();
+		if ENABLE_VALIDATION_LAYERS {
+			let dbg_utils_name = vk::EXT_DEBUG_UTILS_NAME
+				.to_str()
+				.expect("Debug utils extension name should be valid");
+			extension_names.push(dbg_utils_name);
+		}
+		log::info!("{} extensions:", extension_names.len());
+		extension_names
 			.iter()
-			.any(|property| property.layer_name_as_c_str().unwrap() == cstr_name.as_c_str())
-	}) {
-		log::error!("One or more required layers are not supported!");
+			.for_each(|extension| log::info!("\t{}", extension));
+		CStringArray::from(extension_names)
 	}
 
-	let app_info = vk::ApplicationInfo {
-		application_version: vk::make_api_version(0, 1, 0, 0),
-		api_version: vk::make_api_version(0, 1, 4, 0),
-		..Default::default()
-	};
-	let create_info = vk::InstanceCreateInfo {
-		p_application_info: &app_info,
-		..Default::default()
-	};
+	fn get_required_layers(entry: &Entry) -> CStringArray {
+		// query layers
+		let layer_properties = unsafe {
+			entry
+				.enumerate_instance_layer_properties()
+				.expect("Should have been able to get layer properties from entry")
+		};
+		log::info!(
+			"{} available instance layer properties:",
+			layer_properties.len()
+		);
+		layer_properties
+			.iter()
+			.for_each(|property| log::info!("\t{:?}", property.layer_name_as_c_str().unwrap()));
+		println!("");
 
-	let instance = unsafe { entry.create_instance(&create_info, None)? };
-	Ok(instance)
+		// make required layers
+		let mut required_layers: Vec<&str> = Vec::new();
+		if ENABLE_VALIDATION_LAYERS {
+			required_layers.extend(VALIDATION_LAYERS.iter());
+		}
+		if required_layers.iter().any(|required_layer| {
+			let cstr_name = CString::new(*required_layer)
+				.expect("Should have been able to create CString from required layer name");
+			!layer_properties
+				.iter()
+				.any(|property| property.layer_name_as_c_str().unwrap() == cstr_name.as_c_str())
+		}) {
+			log::error!("One or more required layers are not supported!");
+		}
+		// needed conversion to put as *const *const i8 in create_info
+		let required_layer_names: Vec<CString> = required_layers
+			.iter()
+			.map(|layer| CString::new(*layer).unwrap())
+			.collect();
+		let required_layer_names_ptrs: Vec<*const i8> = required_layer_names
+			.iter()
+			.map(|layer| layer.as_ptr())
+			.collect();
+		CStringArray::new(required_layer_names, required_layer_names_ptrs)
+	}
 }
 
-fn init_vulkan(app: &mut Application) {
-	app.instance = Some(create_instance().expect("Should have been able to create instance"));
+fn convert_vec_str_to_i8(v: &Vec<&str>) -> (Vec<CString>, Vec<*const i8>) {
+	let v_cstr: Vec<CString> = v.iter().map(|item| CString::new(*item).unwrap()).collect();
+	let v_ptr: Vec<*const i8> = v_cstr.iter().map(|item| item.as_ptr()).collect();
+	(v_cstr, v_ptr)
 }
 fn main() {
 	env_logger::builder()
