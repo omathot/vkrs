@@ -204,7 +204,7 @@ impl Application {
 			.iter()
 			.map(|ext| ext.as_ptr())
 			.collect();
-		let mut device_create_info = vk::DeviceCreateInfo {
+		let device_create_info = vk::DeviceCreateInfo {
 			p_queue_create_infos: &device_queue_create_info,
 			queue_create_info_count: 1,
 			enabled_extension_count: DEVICE_REQUIRED_EXTENSIONS.len() as u32,
@@ -218,6 +218,14 @@ impl Application {
 				instance
 					.create_device(self.physical_device.unwrap(), &device_create_info, None)
 					.expect("Should have been able to create logical device"),
+			)
+		};
+		self.graphics_queue = unsafe {
+			Some(
+				self.device
+					.as_ref()
+					.unwrap()
+					.get_device_queue(self.graphics_index, 0),
 			)
 		};
 	}
