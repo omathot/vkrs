@@ -1,6 +1,6 @@
 use super::{Application, Entry, Instant, vk};
 use crate::common::*;
-use std::ffi::CString;
+use std::ffi::{CString, c_char};
 
 impl Application {
 	pub fn new() -> Application {
@@ -109,12 +109,11 @@ impl Application {
 		}) {
 			log::error!("One or more required layers are not supported!");
 		}
-		// needed conversion to put as *const *const i8 in create_info
 		let required_layer_names: Vec<CString> = required_layers
 			.iter()
 			.map(|layer| CString::new(*layer).unwrap())
 			.collect();
-		let required_layer_names_ptrs: Vec<*const u8> = required_layer_names
+		let required_layer_names_ptrs: Vec<*const c_char> = required_layer_names
 			.iter()
 			.map(|layer| layer.as_ptr())
 			.collect();
