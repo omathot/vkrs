@@ -1,5 +1,5 @@
 use ash::{Entry, Instance, vk};
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::time::Instant;
 use std::{error::Error, result::Result};
 use winit::application::ApplicationHandler;
@@ -12,6 +12,8 @@ mod utils;
 static ENABLE_VALIDATION_LAYERS: bool = true;
 #[cfg(not(debug_assertions))]
 static ENABLE_VALIDATION_LAYERS: bool = false;
+
+static VALIDATION_LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
 
 struct Application {
 	instance: Option<Instance>,
@@ -87,17 +89,39 @@ fn create_instance() -> Result<Instance, vk::Result> {
 			.enumerate_instance_extension_properties(None)
 			.expect("Should have been able to get instance extension properties")
 	};
-	log::info!("{} vailable extensions", extensions.len());
+
+	// query extensions
+	log::info!("{} available extensions:", extensions.len());
 	for extension in extensions {
-		unsafe {
-			log::info!(
-				"\t{}",
-				CStr::from_ptr(extension.extension_name.as_ptr())
-					.to_str()
-					.expect("Should have been able to get CStr from vk extension property")
-			);
-		}
+		log::info!("\t{:?}", extension.extension_name_as_c_str().unwrap());
 	}
+	println!("");
+	let layer_properties = unsafe {
+		entry
+			.enumerate_instance_layer_properties()
+			.expect("Should have been able to get layer properties from entry")
+	};
+	log::info!(
+		"{} available instance layer properties:",
+		layer_properties.len()
+	);
+	layer_properties
+		.iter()
+		.for_each(|property| log::info!("\t{:?}", property.layer_name_as_c_str().unwrap()));
+	let mut required_layers: Vec<&str> = Vec::new();
+	if ENABLE_VALIDATION_LAYERS {
+		required_layers.extend(VALIDATION_LAYERS.iter());
+	}
+	if required_layers.iter().any(|required_layer| {
+		let cstr_name = CString::new(*required_layer)
+			.expect("Should have been able to create CString from required layer name");
+		!layer_properties
+			.iter()
+			.any(|property| property.layer_name_as_c_str().unwrap() == cstr_name.as_c_str())
+	}) {
+		log::error!("One or more required layers are not supported!");
+	}
+
 	let app_info = vk::ApplicationInfo {
 		application_version: vk::make_api_version(0, 1, 0, 0),
 		api_version: vk::make_api_version(0, 1, 4, 0),
@@ -108,7 +132,6 @@ fn create_instance() -> Result<Instance, vk::Result> {
 		..Default::default()
 	};
 
-	// query extensions
 	let instance = unsafe { entry.create_instance(&create_info, None)? };
 	Ok(instance)
 }
@@ -124,7 +147,7 @@ fn main() {
 	let event_loop = EventLoop::new().expect("Should have been able to get event loop");
 	event_loop.set_control_flow(ControlFlow::Poll);
 
-	let mut app = Application::new().expect("Should have been able to create application");
+	let mut app = Application::new();
 	event_loop
 		.run_app(&mut app)
 		.expect("Should have been able to run app loop");
