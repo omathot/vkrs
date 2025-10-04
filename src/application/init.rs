@@ -1,40 +1,33 @@
-use super::{Application, Entry, Instant, vk};
+use super::{Application, vk};
 use crate::common::*;
 use std::ffi::{CString, c_char};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum AppError {
+	#[error("Init error: `{0}`")]
+	Init(String),
+	#[error("Unknown error")]
+	Unknown,
+}
 
 impl Application {
-	pub fn new() -> Application {
-		log::info!("Building application!");
-		let entry = Entry::linked();
-		#[cfg(debug_assertions)]
-		{
-			// query all extensions
-			let available_extensions = unsafe {
-				entry
-					.enumerate_instance_extension_properties(None)
-					.expect("Should have been able to get instance extension properties")
-			};
-			log::info!("{} available extensions:", available_extensions.len());
-			available_extensions.iter().for_each(|extension| {
-				log::info!("\t{:?}", extension.extension_name_as_c_str().unwrap())
-			});
-			println!("");
-		}
-		Application {
-			entry,
-			instance: None,
-			window: None,
-			debug_messenger: None,
-			last_frame: Instant::now(),
-		}
-	}
 	pub fn update(&self, dt: f32) {}
 	pub fn render(&self) {}
-	pub fn cleanup(&mut self) {}
+	pub fn cleanup(&mut self) {
+		if let (Some(loader), Some(messenger)) = (&self.debug_utils_loader, self.debug_messenger) {
+			unsafe { loader.destroy_debug_utils_messenger(messenger, None) };
+		}
+		if let Some(instance) = &self.instance {
+			unsafe { instance.destroy_instance(None) };
+		}
+	}
 
-	fn create_instance(&mut self) -> Result<(), vk::Result> {
+	fn create_instance(&mut self) {
 		// make required layers
-		let required_layers = self.get_required_layers();
+		let required_layers = self
+			.get_required_layers()
+			.expect("Should have gotten required layers");
 
 		// make required extensions
 		let required_extensions: CStringArray = Application::get_required_extensions();
@@ -53,14 +46,16 @@ impl Application {
 			..Default::default()
 		};
 
-		let instance = unsafe { self.entry.create_instance(&create_info, None)? };
+		let instance = unsafe {
+			self.entry
+				.create_instance(&create_info, None)
+				.expect("Should have been able to create instance")
+		};
 		self.instance = Some(instance);
-		Ok(())
 	}
 
 	pub fn init_vulkan(&mut self) {
-		self.create_instance()
-			.expect("Should have been able to create instance");
+		self.create_instance();
 		self.setup_debug_messenger();
 	}
 
@@ -79,7 +74,7 @@ impl Application {
 		CStringArray::from(extension_names)
 	}
 
-	fn get_required_layers(&self) -> CStringArray {
+	fn get_required_layers(&self) -> Result<CStringArray, AppError> {
 		// query layers
 		let layer_properties = unsafe {
 			self.entry
@@ -108,6 +103,9 @@ impl Application {
 				.any(|property| property.layer_name_as_c_str().unwrap() == cstr_name.as_c_str())
 		}) {
 			log::error!("One or more required layers are not supported!");
+			return Err(AppError::Init(
+				"One or more required layers are not supported!".to_string(),
+			));
 		}
 		let required_layer_names: Vec<CString> = required_layers
 			.iter()
@@ -117,6 +115,22 @@ impl Application {
 			.iter()
 			.map(|layer| layer.as_ptr())
 			.collect();
-		CStringArray::new(required_layer_names, required_layer_names_ptrs)
+		Ok(CStringArray::new(
+			required_layer_names,
+			required_layer_names_ptrs,
+		))
+	}
+
+	fn pick_physical_device(&self) {
+		let instance = self
+			.instance
+			.as_ref()
+			.expect("Instance should be init before physical device");
+		let devices = unsafe {
+			instance
+				.enumerate_physical_devices()
+				.expect("Should be able to list physical devices")
+		};
+		if devices.is_empty() {}
 	}
 }

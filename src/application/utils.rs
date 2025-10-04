@@ -1,3 +1,5 @@
+use ash::ext::debug_utils;
+
 use super::{Application, ENABLE_VALIDATION_LAYERS, vk};
 use std::ffi::CStr;
 
@@ -6,6 +8,11 @@ impl Application {
 		if !ENABLE_VALIDATION_LAYERS {
 			return;
 		}
+		let instance = self
+			.instance
+			.as_ref()
+			.expect("Instance should be init in new before debug messenger");
+		let debug_utils_loader = debug_utils::Instance::new(&self.entry, instance);
 		let severity_flags = vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE
 			| vk::DebugUtilsMessageSeverityFlagsEXT::INFO
 			| vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
@@ -15,12 +22,16 @@ impl Application {
 		let messenger_create_info = vk::DebugUtilsMessengerCreateInfoEXT {
 			message_severity: severity_flags,
 			message_type: message_type_flags,
-			// pfn_user_callback: &Application::debug_callback,
+			pfn_user_callback: Some(Application::debug_callback),
 			..Default::default()
 		};
-		// if let Some(instance) = &self.instance {
-		// 	instance.create_debug_utils_messenger();
-		// }
+		let messenger = unsafe {
+			debug_utils_loader
+				.create_debug_utils_messenger(&messenger_create_info, None)
+				.expect("Should have been able to create debug messenger")
+		};
+		self.debug_utils_loader = Some(debug_utils_loader);
+		self.debug_messenger = Some(messenger);
 	}
 
 	pub unsafe extern "system" fn debug_callback(
