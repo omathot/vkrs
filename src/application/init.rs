@@ -1,6 +1,10 @@
 use super::{Application, vk};
 use crate::common::*;
-use std::ffi::{CString, c_char};
+use std::{
+	collections::HashMap,
+	ffi::{CStr, CString, c_char},
+	task::Waker,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -30,7 +34,7 @@ impl Application {
 			.expect("Should have gotten required layers");
 
 		// make required extensions
-		let required_extensions: CStringArray = Application::get_required_extensions();
+		let required_extensions: Vec<*const c_char> = Application::get_required_extensions();
 
 		let app_info = vk::ApplicationInfo {
 			application_version: vk::make_api_version(0, 1, 0, 0),
@@ -57,21 +61,21 @@ impl Application {
 	pub fn init_vulkan(&mut self) {
 		self.create_instance();
 		self.setup_debug_messenger();
+		self.pick_physical_device();
+		self.create_logical_device();
 	}
 
-	fn get_required_extensions() -> CStringArray {
+	fn get_required_extensions() -> Vec<*const c_char> {
 		let mut extension_names = WL_REQUIRED_EXTENSIONS.to_vec();
 		if ENABLE_VALIDATION_LAYERS {
-			let dbg_utils_name = vk::EXT_DEBUG_UTILS_NAME
-				.to_str()
-				.expect("Debug utils extension name should be valid");
-			extension_names.push(dbg_utils_name);
+			extension_names.push(vk::EXT_DEBUG_UTILS_NAME);
 		}
-		log::info!("{} extensions:", extension_names.len());
+		log::info!("{} required extensions:", extension_names.len());
 		extension_names
 			.iter()
-			.for_each(|extension| log::info!("\t{}", extension));
-		CStringArray::from(extension_names)
+			.for_each(|extension| log::info!("\t{:?}", extension));
+		println!("");
+		extension_names.iter().map(|cstr| cstr.as_ptr()).collect()
 	}
 
 	fn get_required_layers(&self) -> Result<CStringArray, AppError> {
@@ -121,7 +125,7 @@ impl Application {
 		))
 	}
 
-	fn pick_physical_device(&self) {
+	fn pick_physical_device(&mut self) {
 		let instance = self
 			.instance
 			.as_ref()
@@ -131,6 +135,103 @@ impl Application {
 				.enumerate_physical_devices()
 				.expect("Should be able to list physical devices")
 		};
-		if devices.is_empty() {}
+		if devices.is_empty() {
+			panic!("No vk physical devices to use");
+		}
+		let mut candidates: HashMap<u32, (vk::PhysicalDevice, String)> = HashMap::new();
+		for device in devices.into_iter() {
+			let features = unsafe { instance.get_physical_device_features(device) };
+			let properties = unsafe { instance.get_physical_device_properties(device) };
+			let name = properties
+				.device_name_as_c_str()
+				.unwrap()
+				.to_str()
+				.unwrap()
+				.to_owned();
+			let mut score = 0;
+			log::info!("Checking device {:?}", name);
+			if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
+				score += 1000;
+			}
+			score += properties.limits.max_image_dimension2_d;
+			if features.geometry_shader != vk::TRUE {
+				log::warn!("device {:?} has no geometry shader", name);
+				continue;
+			}
+			candidates.insert(score, (device, name));
+		}
+		if candidates.is_empty() {
+			log::error!("Could not find suitable GPU");
+			return;
+		}
+		// deref device, but keep name as a reference
+		if let Some((&highscore, &(device, ref name))) =
+			candidates.iter().max_by_key(|(score, (_, _))| *score)
+		{
+			if let Some(graphics_index) = self.find_queue_families(device) {
+				self.graphics_index = graphics_index;
+			} else {
+				log::warn!("device {:?} has no graphics queue fam", name);
+				panic!();
+			}
+			log::info!("picked device {:?}: score = {}", name, highscore);
+			self.physical_device = Some(device);
+		}
+	}
+
+	fn create_logical_device(&mut self) {
+		let instance = self.instance.as_ref().unwrap();
+		let q_fam_properties = unsafe {
+			instance.get_physical_device_queue_family_properties(self.physical_device.unwrap())
+		};
+		let prio: f32 = 0.;
+
+		//features
+		let mut dynamic_rendering = vk::PhysicalDeviceDynamicRenderingFeatures {
+			dynamic_rendering: vk::TRUE,
+			..Default::default()
+		};
+		let mut extended_dynamic_state = vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT {
+			extended_dynamic_state: vk::TRUE,
+			..Default::default()
+		};
+		let device_queue_create_info = vk::DeviceQueueCreateInfo {
+			queue_family_index: self.graphics_index,
+			p_queue_priorities: &prio,
+			queue_count: 1,
+			..Default::default()
+		};
+
+		// device extensions
+		let device_extensions: Vec<*const c_char> = DEVICE_REQUIRED_EXTENSIONS
+			.iter()
+			.map(|ext| ext.as_ptr())
+			.collect();
+		let mut device_create_info = vk::DeviceCreateInfo {
+			p_queue_create_infos: &device_queue_create_info,
+			queue_create_info_count: 1,
+			enabled_extension_count: DEVICE_REQUIRED_EXTENSIONS.len() as u32,
+			pp_enabled_extension_names: device_extensions.as_ptr(),
+			..Default::default()
+		}
+		.push_next(&mut dynamic_rendering)
+		.push_next(&mut extended_dynamic_state);
+		self.device = unsafe {
+			Some(
+				instance
+					.create_device(self.physical_device.unwrap(), &device_create_info, None)
+					.expect("Should have been able to create logical device"),
+			)
+		};
+	}
+
+	fn find_queue_families(&self, device: vk::PhysicalDevice) -> Option<u32> {
+		let instance = self.instance.as_ref().unwrap();
+		let queue_family_properties =
+			unsafe { instance.get_physical_device_queue_family_properties(device) };
+		queue_family_properties
+			.iter()
+			.position(|queue| queue.queue_flags.contains(vk::QueueFlags::GRAPHICS))
+			.map(|index| index as u32)
 	}
 }

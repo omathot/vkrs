@@ -1,13 +1,22 @@
-use std::ffi::{CString, c_char};
+use ash::vk;
+use std::ffi::{CStr, CString, c_char};
 
+// layers
 #[cfg(debug_assertions)]
 pub static ENABLE_VALIDATION_LAYERS: bool = true;
 #[cfg(not(debug_assertions))]
 pub static ENABLE_VALIDATION_LAYERS: bool = false;
-
 pub static VALIDATION_LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
-// wayland required extensions. will find better solution to this later
-pub static WL_REQUIRED_EXTENSIONS: [&str; 2] = ["VK_KHR_surface", "VK_KHR_wayland_surface"];
+
+// extensions
+pub static WL_REQUIRED_EXTENSIONS: [&CStr; 2] =
+	[vk::KHR_SURFACE_NAME, vk::KHR_WAYLAND_SURFACE_NAME];
+
+pub static DEVICE_REQUIRED_EXTENSIONS: [&CStr; 3] = [
+	vk::KHR_SWAPCHAIN_NAME,
+	vk::KHR_SPIRV_1_4_NAME,
+	vk::KHR_SYNCHRONIZATION2_NAME,
+];
 
 // the only purpose of this struct is to keep the CString alive as long as the *const c_char
 // otherwise we have to juggle both all the time to keep chars valid

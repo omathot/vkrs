@@ -1,5 +1,5 @@
 use ash::ext::debug_utils;
-use ash::{Entry, Instance, vk};
+use ash::{Device, Entry, Instance, vk};
 use std::time::Instant;
 use winit::window::Window;
 
@@ -17,6 +17,8 @@ pub struct Application {
 	pub debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
 	pub physical_device: Option<vk::PhysicalDevice>,
+	pub graphics_index: u32,
+	pub device: Option<Device>,
 
 	pub last_frame: Instant,
 }
@@ -46,6 +48,8 @@ impl Application {
 			debug_utils_loader: None,
 			debug_messenger: None,
 			physical_device: None,
+			graphics_index: 0,
+			device: None,
 			last_frame: Instant::now(),
 		}
 	}
