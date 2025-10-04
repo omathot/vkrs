@@ -1,4 +1,4 @@
-use super::CString;
+use std::ffi::CString;
 
 #[cfg(debug_assertions)]
 pub static ENABLE_VALIDATION_LAYERS: bool = true;
