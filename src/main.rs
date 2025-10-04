@@ -8,6 +8,11 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes};
 mod utils;
 
+#[cfg(debug_assertions)]
+static ENABLE_VALIDATION_LAYERS: bool = true;
+#[cfg(not(debug_assertions))]
+static ENABLE_VALIDATION_LAYERS: bool = false;
+
 struct Application {
 	instance: Option<Instance>,
 	window: Option<Window>,
@@ -15,6 +20,7 @@ struct Application {
 	last_frame: Instant,
 }
 impl ApplicationHandler for Application {
+	// Init our graphics context on resumed because of certain platforms
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		if self.instance.is_none() {
 			init_vulkan(self);
@@ -28,6 +34,7 @@ impl ApplicationHandler for Application {
 			);
 		}
 	}
+	fn suspended(&mut self, event_loop: &ActiveEventLoop) {}
 	fn window_event(
 		&mut self,
 		event_loop: &ActiveEventLoop,
@@ -60,13 +67,13 @@ impl ApplicationHandler for Application {
 }
 
 impl Application {
-	pub fn new() -> Result<Self, Box<dyn Error>> {
+	pub fn new() -> Application {
 		log::info!("Building application!");
-		Ok(Application {
+		Application {
 			instance: None,
 			window: None,
 			last_frame: Instant::now(),
-		})
+		}
 	}
 	fn update(&self, dt: f32) {}
 	fn render(&self) {}
