@@ -1,0 +1,14 @@
+[package]
+name = "learnvulkan"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.99"
+ash = {version = "0.38.0", features = ["linked"]}
+cgmath = "0.18.0"
+env_logger = "0.11.8"
+log = "0.4.27"
+thiserror = "2.0.16"
+vk-mem = "0.5.0"
+winit = "0.30.12"
