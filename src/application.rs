@@ -17,8 +17,10 @@ pub struct Application {
 	pub debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
 	pub physical_device: Option<vk::PhysicalDevice>,
-	pub graphics_index: u32,
 	pub device: Option<Device>,
+
+	pub graphics_index: u32,
+	pub graphics_queue: Option<vk::Queue>,
 
 	pub last_frame: Instant,
 }
@@ -48,8 +50,9 @@ impl Application {
 			debug_utils_loader: None,
 			debug_messenger: None,
 			physical_device: None,
-			graphics_index: 0,
 			device: None,
+			graphics_index: 0,
+			graphics_queue: None,
 			last_frame: Instant::now(),
 		}
 	}

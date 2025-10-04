@@ -138,7 +138,7 @@ impl Application {
 		if devices.is_empty() {
 			panic!("No vk physical devices to use");
 		}
-		let mut candidates: HashMap<u32, (vk::PhysicalDevice, String)> = HashMap::new();
+		let mut candidates: Vec<(u32, vk::PhysicalDevice, String)> = Vec::new();
 		for device in devices.into_iter() {
 			let features = unsafe { instance.get_physical_device_features(device) };
 			let properties = unsafe { instance.get_physical_device_properties(device) };
@@ -148,6 +148,16 @@ impl Application {
 				.to_str()
 				.unwrap()
 				.to_owned();
+			// requirements
+			if features.geometry_shader != vk::TRUE {
+				log::warn!("device {} does not have a geometry shader", name);
+				continue;
+			}
+			if self.find_queue_families(device).is_none() {
+				log::warn!("Device {} has no suitable queue families, skipping", name);
+				continue;
+			}
+
 			let mut score = 0;
 			log::info!("Checking device {:?}", name);
 			if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
@@ -158,34 +168,21 @@ impl Application {
 				log::warn!("device {:?} has no geometry shader", name);
 				continue;
 			}
-			candidates.insert(score, (device, name));
+			candidates.push((score, device, name));
 		}
 		if candidates.is_empty() {
-			log::error!("Could not find suitable GPU");
-			return;
+			panic!("Could not find suitable GPU");
 		}
-		// deref device, but keep name as a reference
-		if let Some((&highscore, &(device, ref name))) =
-			candidates.iter().max_by_key(|(score, (_, _))| *score)
-		{
-			if let Some(graphics_index) = self.find_queue_families(device) {
-				self.graphics_index = graphics_index;
-			} else {
-				log::warn!("device {:?} has no graphics queue fam", name);
-				panic!();
-			}
-			log::info!("picked device {:?}: score = {}", name, highscore);
-			self.physical_device = Some(device);
-		}
+		candidates.sort_by(|a, b| b.0.cmp(&a.0));
+		let &(score, device, ref name) = &candidates[0];
+		log::info!("picked device {}: score = {}", name, score);
+		self.physical_device = Some(device);
+		self.graphics_index = self.find_queue_families(device).unwrap();
 	}
 
 	fn create_logical_device(&mut self) {
 		let instance = self.instance.as_ref().unwrap();
-		let q_fam_properties = unsafe {
-			instance.get_physical_device_queue_family_properties(self.physical_device.unwrap())
-		};
 		let prio: f32 = 0.;
-
 		//features
 		let mut dynamic_rendering = vk::PhysicalDeviceDynamicRenderingFeatures {
 			dynamic_rendering: vk::TRUE,
