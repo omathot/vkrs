@@ -13,7 +13,7 @@ pub static WL_REQUIRED_EXTENSIONS: [&str; 2] = ["VK_KHR_surface", "VK_KHR_waylan
 // otherwise we have to juggle both all the time to keep i8s valid
 pub struct CStringArray {
 	strings: Vec<CString>,
-	ptrs: Vec<*const i8>,
+	ptrs: Vec<*const u8>,
 }
 
 impl From<&[&str]> for CStringArray {
@@ -33,10 +33,10 @@ impl From<Vec<&str>> for CStringArray {
 }
 
 impl CStringArray {
-	pub fn new(strings: Vec<CString>, ptrs: Vec<*const i8>) -> CStringArray {
+	pub fn new(strings: Vec<CString>, ptrs: Vec<*const u8>) -> CStringArray {
 		CStringArray { strings, ptrs }
 	}
-	pub fn as_ptr(&self) -> *const *const i8 {
+	pub fn as_ptr(&self) -> *const *const u8 {
 		self.ptrs.as_ptr()
 	}
 	pub fn len(&self) -> usize {

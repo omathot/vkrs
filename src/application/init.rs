@@ -114,7 +114,7 @@ impl Application {
 			.iter()
 			.map(|layer| CString::new(*layer).unwrap())
 			.collect();
-		let required_layer_names_ptrs: Vec<*const i8> = required_layer_names
+		let required_layer_names_ptrs: Vec<*const u8> = required_layer_names
 			.iter()
 			.map(|layer| layer.as_ptr())
 			.collect();
