@@ -87,6 +87,7 @@ impl Application {
 		self.create_surface();
 		self.pick_physical_device();
 		self.create_logical_device();
+		self.find_queue_families();
 	}
 
 	fn get_required_extensions() -> Vec<*const c_char> {
@@ -205,6 +206,9 @@ impl Application {
 
 	fn create_logical_device(&mut self) {
 		let instance = self.instance.as_ref().unwrap();
+		let loader = self.surface_loader.as_ref().unwrap();
+		let phys_device = self.physical_device.unwrap();
+
 		// queue
 		let prio: f32 = 0.;
 		let device_queue_create_info = vk::DeviceQueueCreateInfo {
@@ -213,7 +217,6 @@ impl Application {
 			queue_count: 1,
 			..Default::default()
 		};
-
 		//features
 		let mut dynamic_rendering = vk::PhysicalDeviceDynamicRenderingFeatures {
 			dynamic_rendering: vk::TRUE,
@@ -223,7 +226,6 @@ impl Application {
 			extended_dynamic_state: vk::TRUE,
 			..Default::default()
 		};
-
 		// device extensions
 		let device_extensions: Vec<*const c_char> = DEVICE_REQUIRED_EXTENSIONS
 			.iter()
@@ -242,14 +244,32 @@ impl Application {
 		self.device = unsafe {
 			Some(
 				instance
-					.create_device(self.physical_device.unwrap(), &device_create_info, None)
+					.create_device(phys_device, &device_create_info, None)
 					.expect("Should have been able to create logical device"),
 			)
 		};
 		if let Some(device) = &self.device {
 			self.graphics_queue = unsafe { Some(device.get_device_queue(self.graphics_index, 0)) };
 		}
-		self.find_queue_families();
+
+		let device = self.device.as_ref().unwrap();
+		let surface = self.surface.unwrap();
+		// It is important that we only try to query for swap chain support after verifying that the extension is available.
+		let capabilities = unsafe {
+			loader
+				.get_physical_device_surface_capabilities(phys_device, surface)
+				.expect("Should be able to query surface capabilities")
+		};
+		let formats = unsafe {
+			loader
+				.get_physical_device_surface_formats(phys_device, surface)
+				.expect("Should be able to query surface forats")
+		};
+		let present_modes = unsafe {
+			loader
+				.get_physical_device_surface_present_modes(phys_device, surface)
+				.expect("Should be able to query surface present modes")
+		};
 	}
 
 	fn has_minimum_queue_families_reqs(&self, device: vk::PhysicalDevice) -> bool {
@@ -270,6 +290,8 @@ impl Application {
 
 		supports_graphics && supports_present
 	}
+
+	fn choose_swap_format(&self, formats: Vec<vk::SurfaceFormatKHR>) {}
 
 	fn find_queue_families(&mut self) {
 		let instance = self.instance.as_ref().unwrap();
