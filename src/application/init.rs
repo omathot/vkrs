@@ -1,17 +1,8 @@
 use super::{Application, vk};
 use crate::common::*;
 use ash::khr::surface;
-use std::ffi::{CStr, CString, c_char};
-use thiserror::Error;
+use std::ffi::{CString, c_char};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-
-#[derive(Error, Debug)]
-pub enum AppError {
-	#[error("Init error: `{0}`")]
-	Init(String),
-	#[error("Unknown error")]
-	Unknown,
-}
 
 impl Application {
 	pub fn update(&self, dt: f32) {}
@@ -32,13 +23,8 @@ impl Application {
 	}
 
 	fn create_instance(&mut self) {
-		// make required layers
-		let required_layers = self
-			.get_required_layers()
-			.expect("Should have gotten required layers");
-
-		// make required extensions
-		let required_extensions: Vec<*const c_char> = Application::get_required_extensions();
+		let required_layers = self.get_required_layers();
+		let required_extensions: Vec<*const c_char> = self.get_required_extensions();
 
 		let app_info = vk::ApplicationInfo {
 			application_version: vk::make_api_version(0, 1, 0, 0),
@@ -88,9 +74,10 @@ impl Application {
 		self.pick_physical_device();
 		self.create_logical_device();
 		self.find_queue_families();
+		self.create_swap_chain();
 	}
 
-	fn get_required_extensions() -> Vec<*const c_char> {
+	fn get_required_extensions(&self) -> Vec<*const c_char> {
 		let mut extension_names = WL_REQUIRED_EXTENSIONS.to_vec();
 		if ENABLE_VALIDATION_LAYERS {
 			extension_names.push(vk::EXT_DEBUG_UTILS_NAME);
@@ -103,7 +90,7 @@ impl Application {
 		extension_names.iter().map(|cstr| cstr.as_ptr()).collect()
 	}
 
-	fn get_required_layers(&self) -> Result<CStringArray, AppError> {
+	fn get_required_layers(&self) -> CStringArray {
 		// query layers
 		let layer_properties = unsafe {
 			self.entry
@@ -131,10 +118,7 @@ impl Application {
 				.iter()
 				.any(|property| property.layer_name_as_c_str().unwrap() == cstr_name.as_c_str())
 		}) {
-			log::error!("One or more required layers are not supported!");
-			return Err(AppError::Init(
-				"One or more required layers are not supported!".to_string(),
-			));
+			panic!("One or more required layers are not supported!");
 		}
 		let required_layer_names: Vec<CString> = required_layers
 			.iter()
@@ -144,10 +128,7 @@ impl Application {
 			.iter()
 			.map(|layer| layer.as_ptr())
 			.collect();
-		Ok(CStringArray::new(
-			required_layer_names,
-			required_layer_names_ptrs,
-		))
+		CStringArray::new(required_layer_names, required_layer_names_ptrs)
 	}
 
 	fn pick_physical_device(&mut self) {
@@ -291,7 +272,41 @@ impl Application {
 		supports_graphics && supports_present
 	}
 
-	fn choose_swap_format(&self, formats: Vec<vk::SurfaceFormatKHR>) {}
+	fn choose_swap_format(&self, formats: &Vec<vk::SurfaceFormatKHR>) -> vk::SurfaceFormatKHR {
+		formats
+			.iter()
+			.find(|f| f.format == vk::Format::B8G8R8A8_SRGB)
+			.copied()
+			.unwrap_or(formats[0])
+	}
+
+	fn choose_swap_present_mode(
+		&self,
+		present_modes: &Vec<vk::PresentModeKHR>,
+	) -> vk::PresentModeKHR {
+		present_modes
+			.iter()
+			.find(|&&mode| mode == vk::PresentModeKHR::MAILBOX) // need to deref mode
+			.copied()
+			.unwrap_or(vk::PresentModeKHR::FIFO)
+	}
+
+	fn choose_swap_extent(&self, capabilities: &vk::SurfaceCapabilitiesKHR) -> vk::Extent2D {
+		if capabilities.current_extent.width != u32::MAX {
+			return capabilities.current_extent;
+		}
+		let size = self.window.as_ref().unwrap().inner_size();
+		vk::Extent2D {
+			width: size.width.clamp(
+				capabilities.min_image_extent.width,
+				capabilities.max_image_extent.width,
+			),
+			height: size.width.clamp(
+				capabilities.min_image_extent.height,
+				capabilities.max_image_extent.height,
+			),
+		}
+	}
 
 	fn find_queue_families(&mut self) {
 		let instance = self.instance.as_ref().unwrap();
@@ -349,4 +364,6 @@ impl Application {
 			self.present_index
 		);
 	}
+
+	fn create_swap_chain(&mut self) {}
 }
