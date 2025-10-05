@@ -172,23 +172,21 @@ impl Application {
 				.to_str()
 				.unwrap()
 				.to_owned();
-			// requirements
-			if features.geometry_shader != vk::TRUE {
-				log::warn!("device {} does not have a geometry shader", name);
-				continue;
-			}
-
-			// TODO: check minimum family queue requirements when picking phys decice
-			// if self.find_queue_families(device).is_none() {
-			// 	log::warn!("Device {} has no suitable queue families, skipping", name);
-			// 	continue;
-			// }
-
 			let mut score = 0;
 			log::info!("Checking device {:?}", name);
 			if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
 				score += 1000;
 			}
+			// requirements
+			if features.geometry_shader != vk::TRUE {
+				log::warn!("device {} does not have a geometry shader", name);
+				continue;
+			}
+			if !self.has_minimum_queue_families_reqs(device) {
+				log::warn!("Device {} has no suitable queue families, skipping", name);
+				continue;
+			}
+
 			score += properties.limits.max_image_dimension2_d;
 			if features.geometry_shader != vk::TRUE {
 				log::warn!("device {:?} has no geometry shader", name);
@@ -252,6 +250,25 @@ impl Application {
 			self.graphics_queue = unsafe { Some(device.get_device_queue(self.graphics_index, 0)) };
 		}
 		self.find_queue_families();
+	}
+
+	fn has_minimum_queue_families_reqs(&self, device: vk::PhysicalDevice) -> bool {
+		let instance = self.instance.as_ref().unwrap();
+		let queue_family_properties =
+			unsafe { instance.get_physical_device_queue_family_properties(device) };
+		let supports_graphics = queue_family_properties
+			.iter()
+			.any(|properties| properties.queue_flags.contains(vk::QueueFlags::GRAPHICS));
+		let supports_present = queue_family_properties.iter().enumerate().any(|(idx, _)| {
+			let loader = self.surface_loader.as_ref().unwrap();
+			unsafe {
+				loader
+					.get_physical_device_surface_support(device, idx as u32, self.surface.unwrap())
+					.expect("Should be able to check for present support")
+			}
+		});
+
+		supports_graphics && supports_present
 	}
 
 	fn find_queue_families(&mut self) {
