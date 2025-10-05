@@ -1,4 +1,5 @@
 use ash::ext::debug_utils;
+use ash::khr::surface;
 use ash::{Device, Entry, Instance, vk};
 use std::time::Instant;
 use winit::window::Window;
@@ -16,11 +17,14 @@ pub struct Application {
 	pub debug_utils_loader: Option<debug_utils::Instance>,
 	pub debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
-	pub physical_device: Option<vk::PhysicalDevice>,
-	pub device: Option<Device>,
-
+	pub physical_device: Option<vk::PhysicalDevice>, // gpu/cpu/other
+	pub device: Option<Device>, // logical connection - 'i am running vk on this device'
 	pub graphics_index: u32,
+	pub present_index: u32,
 	pub graphics_queue: Option<vk::Queue>,
+
+	pub surface_loader: Option<surface::Instance>,
+	pub surface: Option<vk::SurfaceKHR>,
 
 	pub last_frame: Instant,
 }
@@ -52,7 +56,10 @@ impl Application {
 			physical_device: None,
 			device: None,
 			graphics_index: 0,
+			present_index: 0,
 			graphics_queue: None,
+			surface_loader: None,
+			surface: None,
 			last_frame: Instant::now(),
 		}
 	}

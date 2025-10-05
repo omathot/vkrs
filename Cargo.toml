@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.99"
 ash = {version = "0.38.0", features = ["linked"]}
+ash-window = "0.13.0"
 cgmath = "0.18.0"
 env_logger = "0.11.8"
 log = "0.4.27"

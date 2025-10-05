@@ -1,11 +1,9 @@
 use super::{Application, vk};
 use crate::common::*;
-use std::{
-	collections::HashMap,
-	ffi::{CStr, CString, c_char},
-	task::Waker,
-};
+use ash::khr::surface;
+use std::ffi::{CStr, CString, c_char};
 use thiserror::Error;
+use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -21,6 +19,12 @@ impl Application {
 	pub fn cleanup(&mut self) {
 		if let (Some(loader), Some(messenger)) = (&self.debug_utils_loader, self.debug_messenger) {
 			unsafe { loader.destroy_debug_utils_messenger(messenger, None) };
+		}
+		if let (Some(surface), Some(loader)) = (self.surface, &self.surface_loader) {
+			unsafe { loader.destroy_surface(surface, None) };
+		}
+		if let Some(device) = &self.device {
+			unsafe { device.destroy_device(None) };
 		}
 		if let Some(instance) = &self.instance {
 			unsafe { instance.destroy_instance(None) };
@@ -58,9 +62,29 @@ impl Application {
 		self.instance = Some(instance);
 	}
 
+	fn create_surface(&mut self) {
+		let entry = &self.entry;
+		let instance = self.instance.as_ref().unwrap();
+		let window = self.window.as_ref().unwrap();
+		let surface = unsafe {
+			ash_window::create_surface(
+				entry,
+				instance,
+				window.display_handle().unwrap().as_raw(),
+				window.window_handle().unwrap().as_raw(),
+				None,
+			)
+			.expect("Should have been able to create surface")
+		};
+
+		self.surface_loader = Some(surface::Instance::new(entry, instance));
+		self.surface = Some(surface);
+	}
+
 	pub fn init_vulkan(&mut self) {
 		self.create_instance();
 		self.setup_debug_messenger();
+		self.create_surface();
 		self.pick_physical_device();
 		self.create_logical_device();
 	}
@@ -182,7 +206,15 @@ impl Application {
 
 	fn create_logical_device(&mut self) {
 		let instance = self.instance.as_ref().unwrap();
+		// queue
 		let prio: f32 = 0.;
+		let device_queue_create_info = vk::DeviceQueueCreateInfo {
+			queue_family_index: self.graphics_index,
+			p_queue_priorities: &prio,
+			queue_count: 1,
+			..Default::default()
+		};
+
 		//features
 		let mut dynamic_rendering = vk::PhysicalDeviceDynamicRenderingFeatures {
 			dynamic_rendering: vk::TRUE,
@@ -190,12 +222,6 @@ impl Application {
 		};
 		let mut extended_dynamic_state = vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT {
 			extended_dynamic_state: vk::TRUE,
-			..Default::default()
-		};
-		let device_queue_create_info = vk::DeviceQueueCreateInfo {
-			queue_family_index: self.graphics_index,
-			p_queue_priorities: &prio,
-			queue_count: 1,
 			..Default::default()
 		};
 
@@ -213,6 +239,7 @@ impl Application {
 		}
 		.push_next(&mut dynamic_rendering)
 		.push_next(&mut extended_dynamic_state);
+
 		self.device = unsafe {
 			Some(
 				instance
@@ -220,14 +247,9 @@ impl Application {
 					.expect("Should have been able to create logical device"),
 			)
 		};
-		self.graphics_queue = unsafe {
-			Some(
-				self.device
-					.as_ref()
-					.unwrap()
-					.get_device_queue(self.graphics_index, 0),
-			)
-		};
+		if let Some(device) = &self.device {
+			self.graphics_queue = unsafe { Some(device.get_device_queue(self.graphics_index, 0)) };
+		}
 	}
 
 	fn find_queue_families(&self, device: vk::PhysicalDevice) -> Option<u32> {
