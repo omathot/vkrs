@@ -177,10 +177,12 @@ impl Application {
 				log::warn!("device {} does not have a geometry shader", name);
 				continue;
 			}
-			if self.find_queue_families(device).is_none() {
-				log::warn!("Device {} has no suitable queue families, skipping", name);
-				continue;
-			}
+
+			// TODO: check minimum family queue requirements when picking phys decice
+			// if self.find_queue_families(device).is_none() {
+			// 	log::warn!("Device {} has no suitable queue families, skipping", name);
+			// 	continue;
+			// }
 
 			let mut score = 0;
 			log::info!("Checking device {:?}", name);
@@ -201,7 +203,6 @@ impl Application {
 		let &(score, device, ref name) = &candidates[0];
 		log::info!("picked device {}: score = {}", name, score);
 		self.physical_device = Some(device);
-		self.graphics_index = self.find_queue_families(device).unwrap();
 	}
 
 	fn create_logical_device(&mut self) {
@@ -250,15 +251,63 @@ impl Application {
 		if let Some(device) = &self.device {
 			self.graphics_queue = unsafe { Some(device.get_device_queue(self.graphics_index, 0)) };
 		}
+		self.find_queue_families();
 	}
 
-	fn find_queue_families(&self, device: vk::PhysicalDevice) -> Option<u32> {
+	fn find_queue_families(&mut self) {
 		let instance = self.instance.as_ref().unwrap();
-		let queue_family_properties =
-			unsafe { instance.get_physical_device_queue_family_properties(device) };
-		queue_family_properties
+		let queue_family_properties = unsafe {
+			instance.get_physical_device_queue_family_properties(self.physical_device.unwrap())
+		};
+
+		let supports_present = |index: usize| -> bool {
+			unsafe {
+				let loader = self.surface_loader.as_ref().unwrap();
+				loader
+					.get_physical_device_surface_support(
+						self.physical_device.unwrap(),
+						index as u32,
+						self.surface.unwrap(),
+					)
+					.unwrap_or(false)
+			}
+		};
+
+		let mut graphics_idx = queue_family_properties
 			.iter()
-			.position(|queue| queue.queue_flags.contains(vk::QueueFlags::GRAPHICS))
-			.map(|index| index as u32)
+			.position(|properties| properties.queue_flags.contains(vk::QueueFlags::GRAPHICS))
+			.expect("Should have been able to find a graphics queue family property");
+		let present_idx = if supports_present(graphics_idx) {
+			graphics_idx
+		} else {
+			// try to find single family that supports both
+			queue_family_properties
+				.iter()
+				.enumerate()
+				.position(|(idx, properties)| {
+					properties.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+						&& supports_present(idx)
+				})
+				.map(|idx| {
+					graphics_idx = idx;
+					idx
+				})
+				.or_else(|| {
+					// use separate family for present
+					queue_family_properties
+						.iter()
+						.enumerate()
+						.find(|(idx, _)| supports_present(*idx))
+						.map(|(idx, _)| idx)
+				})
+				.expect("Should have been able to find graphics and present queues")
+		};
+		self.graphics_index = graphics_idx as u32;
+		self.present_index = present_idx as u32;
+		log::info!(
+			"graphics index: [{}], present index: [{}]",
+			self.graphics_index,
+			self.present_index
+		);
 	}
 }

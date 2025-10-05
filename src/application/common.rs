@@ -19,7 +19,7 @@ pub static DEVICE_REQUIRED_EXTENSIONS: [&CStr; 3] = [
 ];
 
 // the only purpose of this struct is to keep the CString alive as long as the *const c_char
-// otherwise we have to juggle both all the time to keep chars valid
+// otherwise we have to juggle both to keep chars valid
 pub struct CStringArray {
 	_strings: Vec<CString>,
 	ptrs: Vec<*const c_char>,
