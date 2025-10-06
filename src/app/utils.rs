@@ -46,13 +46,13 @@ impl Application {
 			.expect("Should have been able to parse message");
 		match msg_severity {
 			vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => {
-				println!("-- Validation layer [{:?}]: {}", msg_type, msg);
+				log::error!("-- Validation layer [{:?}]: {}", msg_type, msg);
 			}
 			vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => {
-				println!("-- Validation layer [{:?}]: {}", msg_type, msg);
+				log::warn!("-- Validation layer [{:?}]: {}", msg_type, msg);
 			}
 			vk::DebugUtilsMessageSeverityFlagsEXT::INFO => {
-				println!("-- Validation layer [{:?}]: {}", msg_type, msg);
+				log::info!("[Validation layer] {:?}, {}", msg_type, msg);
 			}
 			_ => {}
 		}

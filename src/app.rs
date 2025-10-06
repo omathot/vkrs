@@ -5,6 +5,7 @@ use std::time::Instant;
 use winit::window::Window;
 
 pub mod common;
+pub mod helpers;
 pub mod init;
 pub mod utils;
 pub mod window;
@@ -17,8 +18,8 @@ pub struct Application {
 	pub debug_utils_loader: Option<debug_utils::Instance>,
 	pub debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
-	pub physical_device: Option<vk::PhysicalDevice>, // gpu/cpu/other
-	pub device: Option<Device>, // logical connection - 'i am running vk on this device'
+	pub physical_device: Option<vk::PhysicalDevice>, // gpu/cpu/other device
+	pub device: Option<Device>, // logical connection - 'i am running vk on this physical device'
 	pub graphics_index: u32,
 	pub present_index: u32,
 	pub graphics_queue: Option<vk::Queue>,

@@ -1,11 +1,11 @@
 use winit::event_loop::{ControlFlow, EventLoop};
 
-mod application;
-use application::*;
+mod app;
+use app::*;
 
 fn main() {
 	env_logger::builder()
-		.filter_module("learnvulkan", log::LevelFilter::Info)
+		.filter_module("lvkrs", log::LevelFilter::Info)
 		.init();
 
 	let event_loop = EventLoop::new().expect("Should have been able to get event loop");

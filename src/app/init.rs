@@ -229,47 +229,6 @@ impl Application {
 					.expect("Should have been able to create logical device"),
 			)
 		};
-		if let Some(device) = &self.device {
-			self.graphics_queue = unsafe { Some(device.get_device_queue(self.graphics_index, 0)) };
-		}
-
-		let device = self.device.as_ref().unwrap();
-		let surface = self.surface.unwrap();
-		// It is important that we only try to query for swap chain support after verifying that the extension is available.
-		let capabilities = unsafe {
-			loader
-				.get_physical_device_surface_capabilities(phys_device, surface)
-				.expect("Should be able to query surface capabilities")
-		};
-		let formats = unsafe {
-			loader
-				.get_physical_device_surface_formats(phys_device, surface)
-				.expect("Should be able to query surface forats")
-		};
-		let present_modes = unsafe {
-			loader
-				.get_physical_device_surface_present_modes(phys_device, surface)
-				.expect("Should be able to query surface present modes")
-		};
-	}
-
-	fn has_minimum_queue_families_reqs(&self, device: vk::PhysicalDevice) -> bool {
-		let instance = self.instance.as_ref().unwrap();
-		let queue_family_properties =
-			unsafe { instance.get_physical_device_queue_family_properties(device) };
-		let supports_graphics = queue_family_properties
-			.iter()
-			.any(|properties| properties.queue_flags.contains(vk::QueueFlags::GRAPHICS));
-		let supports_present = queue_family_properties.iter().enumerate().any(|(idx, _)| {
-			let loader = self.surface_loader.as_ref().unwrap();
-			unsafe {
-				loader
-					.get_physical_device_surface_support(device, idx as u32, self.surface.unwrap())
-					.expect("Should be able to check for present support")
-			}
-		});
-
-		supports_graphics && supports_present
 	}
 
 	fn choose_swap_format(&self, formats: &Vec<vk::SurfaceFormatKHR>) -> vk::SurfaceFormatKHR {
@@ -358,6 +317,9 @@ impl Application {
 		};
 		self.graphics_index = graphics_idx as u32;
 		self.present_index = present_idx as u32;
+		if let Some(device) = &self.device {
+			self.graphics_queue = unsafe { Some(device.get_device_queue(self.graphics_index, 0)) };
+		}
 		log::info!(
 			"graphics index: [{}], present index: [{}]",
 			self.graphics_index,
@@ -365,5 +327,35 @@ impl Application {
 		);
 	}
 
-	fn create_swap_chain(&mut self) {}
+	fn create_swap_chain(&mut self) {
+		let loader = self.surface_loader.as_ref().unwrap();
+		let phys_device = self.physical_device.unwrap();
+		let surface = self.surface.unwrap();
+		// It is important that we only try to query for swap chain support after verifying that the extension is available.
+		let capabilities = unsafe {
+			loader
+				.get_physical_device_surface_capabilities(phys_device, surface)
+				.expect("Should be able to query surface capabilities")
+		};
+		let formats = unsafe {
+			loader
+				.get_physical_device_surface_formats(phys_device, surface)
+				.expect("Should be able to query surface forats")
+		};
+		let present_modes = unsafe {
+			loader
+				.get_physical_device_surface_present_modes(phys_device, surface)
+				.expect("Should be able to query surface present modes")
+		};
+
+		let format = self.choose_swap_format(&formats);
+		let present_mode = self.choose_swap_present_mode(&present_modes);
+		let extent = self.choose_swap_extent(&capabilities);
+		let mut min_img_count = capabilities.min_image_count.max(3u32);
+		min_img_count = match min_img_count {
+			0 => min_img_count,
+			max => min_img_count.min(max),
+		};
+		let img_count = capabilities.min_image_count + 1;
+	}
 }
