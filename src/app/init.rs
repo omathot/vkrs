@@ -348,7 +348,8 @@ impl Application {
 				.expect("Should be able to query surface present modes")
 		};
 
-		self.swap_chain_format = Some(self.choose_swap_format(&formats));
+		let format = self.choose_swap_format(&formats);
+		self.swap_chain_format = Some(format.format);
 		self.swap_chain_extent = Some(self.choose_swap_extent(&capabilities));
 		let present_mode = self.choose_swap_present_mode(&present_modes);
 		let mut img_count = capabilities.min_image_count + 1;
@@ -360,8 +361,8 @@ impl Application {
 			flags: vk::SwapchainCreateFlagsKHR::empty(),
 			surface: self.surface.unwrap(),
 			min_image_count: img_count,
-			image_format: self.swap_chain_format.unwrap().format,
-			image_color_space: self.swap_chain_format.unwrap().color_space,
+			image_format: format.format,
+			image_color_space: format.color_space,
 			image_extent: self.swap_chain_extent.unwrap(),
 			image_array_layers: 1, // always 1 unless doing stereostopic 3d app
 			image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,

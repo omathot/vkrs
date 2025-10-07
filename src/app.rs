@@ -19,7 +19,7 @@ pub struct Application {
 	pub debug_utils_loader: Option<debug_utils::Instance>,
 	pub debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
-	pub physical_device: Option<vk::PhysicalDevice>, // gpu/cpu/other device
+	pub physical_device: Option<vk::PhysicalDevice>,
 	pub device: Option<Device>, // logical connection - 'i am running vk on this physical device'
 	pub graphics_index: u32,
 	pub present_index: u32,
@@ -31,7 +31,7 @@ pub struct Application {
 	pub swap_chain_device: Option<swapchain::Device>,
 	pub swap_chain: Option<vk::SwapchainKHR>,
 	pub swap_chain_imgs: Option<Vec<vk::Image>>,
-	pub swap_chain_format: Option<vk::SurfaceFormatKHR>,
+	pub swap_chain_format: Option<vk::Format>,
 	pub swap_chain_extent: Option<vk::Extent2D>,
 
 	pub last_frame: Instant,
