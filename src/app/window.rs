@@ -5,7 +5,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::WindowAttributes;
 
 impl ApplicationHandler for Application {
-	// Init our graphics context on resumed because of certain platforms
+	// Init our graphics context on resumed because of certain platforms (e.g. Android)
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		if self.window.is_none() {
 			let attributes = WindowAttributes::default().with_title("Vulkan rs");

@@ -1,5 +1,6 @@
 use ash::ext::debug_utils;
 use ash::khr::surface;
+use ash::khr::swapchain;
 use ash::{Device, Entry, Instance, vk};
 use std::time::Instant;
 use winit::window::Window;
@@ -26,6 +27,12 @@ pub struct Application {
 
 	pub surface_loader: Option<surface::Instance>,
 	pub surface: Option<vk::SurfaceKHR>,
+
+	pub swap_chain_device: Option<swapchain::Device>,
+	pub swap_chain: Option<vk::SwapchainKHR>,
+	pub swap_chain_imgs: Option<Vec<vk::Image>>,
+	pub swap_chain_format: Option<vk::SurfaceFormatKHR>,
+	pub swap_chain_extent: Option<vk::Extent2D>,
 
 	pub last_frame: Instant,
 }
@@ -61,6 +68,11 @@ impl Application {
 			graphics_queue: None,
 			surface_loader: None,
 			surface: None,
+			swap_chain_device: None,
+			swap_chain: None,
+			swap_chain_imgs: None,
+			swap_chain_format: None,
+			swap_chain_extent: None,
 			last_frame: Instant::now(),
 		}
 	}

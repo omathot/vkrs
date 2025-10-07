@@ -1,6 +1,6 @@
 use super::{Application, vk};
 use crate::common::*;
-use ash::khr::surface;
+use ash::khr::{surface, swapchain};
 use std::ffi::{CString, c_char};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
@@ -340,7 +340,7 @@ impl Application {
 		let formats = unsafe {
 			loader
 				.get_physical_device_surface_formats(phys_device, surface)
-				.expect("Should be able to query surface forats")
+				.expect("Should be able to query surface formats")
 		};
 		let present_modes = unsafe {
 			loader
@@ -348,14 +348,60 @@ impl Application {
 				.expect("Should be able to query surface present modes")
 		};
 
-		let format = self.choose_swap_format(&formats);
+		self.swap_chain_format = Some(self.choose_swap_format(&formats));
+		self.swap_chain_extent = Some(self.choose_swap_extent(&capabilities));
 		let present_mode = self.choose_swap_present_mode(&present_modes);
-		let extent = self.choose_swap_extent(&capabilities);
-		let mut min_img_count = capabilities.min_image_count.max(3u32);
-		min_img_count = match min_img_count {
-			0 => min_img_count,
-			max => min_img_count.min(max),
+		let mut img_count = capabilities.min_image_count + 1;
+		if capabilities.max_image_count > 0 && img_count > capabilities.max_image_count {
+			img_count = capabilities.max_image_count;
+		}
+
+		let mut swapchain_create_info = vk::SwapchainCreateInfoKHR {
+			flags: vk::SwapchainCreateFlagsKHR::empty(),
+			surface: self.surface.unwrap(),
+			min_image_count: img_count,
+			image_format: self.swap_chain_format.unwrap().format,
+			image_color_space: self.swap_chain_format.unwrap().color_space,
+			image_extent: self.swap_chain_extent.unwrap(),
+			image_array_layers: 1, // always 1 unless doing stereostopic 3d app
+			image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+			image_sharing_mode: vk::SharingMode::EXCLUSIVE, // assume same family for present and graphics
+			pre_transform: capabilities.current_transform,
+			composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+			present_mode: present_mode,
+			clipped: vk::TRUE,
+			..Default::default()
 		};
-		let img_count = capabilities.min_image_count + 1;
+		let indices: [u32; 2];
+		if self.graphics_index != self.present_index {
+			let graphics_idx = self.graphics_index;
+			let present_idx = self.present_index;
+			indices = [graphics_idx, present_idx];
+			swapchain_create_info = swapchain_create_info
+				.image_sharing_mode(vk::SharingMode::CONCURRENT)
+				.queue_family_indices(&indices);
+			swapchain_create_info.queue_family_index_count = 2;
+		}
+
+		let instance = self.instance.as_ref().unwrap();
+		self.swap_chain_device = Some(swapchain::Device::new(
+			instance,
+			self.device.as_ref().unwrap(),
+		));
+		let swap_device = self.swap_chain_device.as_ref().unwrap();
+		self.swap_chain = unsafe {
+			Some(
+				swap_device
+					.create_swapchain(&swapchain_create_info, None)
+					.expect("Should have been able to create swapchain"),
+			)
+		};
+		self.swap_chain_imgs = unsafe {
+			Some(
+				swap_device
+					.get_swapchain_images(self.swap_chain.unwrap())
+					.expect("Should have been able to get swapchain images"),
+			)
+		};
 	}
 }
