@@ -30,9 +30,10 @@ pub struct Application {
 
 	pub swap_chain_device: Option<swapchain::Device>,
 	pub swap_chain: Option<vk::SwapchainKHR>,
-	pub swap_chain_imgs: Option<Vec<vk::Image>>,
 	pub swap_chain_format: Option<vk::Format>,
 	pub swap_chain_extent: Option<vk::Extent2D>,
+	pub swap_chain_imgs: Option<Vec<vk::Image>>,
+	pub swap_chain_img_views: Option<Vec<vk::ImageView>>,
 
 	pub last_frame: Instant,
 }
@@ -70,10 +71,37 @@ impl Application {
 			surface: None,
 			swap_chain_device: None,
 			swap_chain: None,
-			swap_chain_imgs: None,
 			swap_chain_format: None,
 			swap_chain_extent: None,
+			swap_chain_imgs: None,
+			swap_chain_img_views: None,
 			last_frame: Instant::now(),
+		}
+	}
+	pub fn update(&self, dt: f32) {}
+	pub fn render(&self) {}
+	pub fn cleanup(&mut self) {
+		if let (Some(loader), Some(messenger)) = (&self.debug_utils_loader, self.debug_messenger) {
+			unsafe { loader.destroy_debug_utils_messenger(messenger, None) };
+		}
+		if let (Some(surface), Some(loader)) = (self.surface, &self.surface_loader) {
+			unsafe { loader.destroy_surface(surface, None) };
+		}
+		if let (Some(swapchain), Some(swap_device)) = (self.swap_chain, &self.swap_chain_device) {
+			unsafe { swap_device.destroy_swapchain(swapchain, None) };
+		}
+		if let Some(device) = &self.device {
+			if let Some(images) = &self.swap_chain_imgs {
+				unsafe {
+					images
+						.iter()
+						.for_each(|img| device.destroy_image(*img, None));
+				}
+			}
+			unsafe { device.destroy_device(None) };
+		}
+		if let Some(instance) = &self.instance {
+			unsafe { instance.destroy_instance(None) };
 		}
 	}
 }
