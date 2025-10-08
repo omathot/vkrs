@@ -74,7 +74,7 @@ impl Application {
 			swap_chain_format: None,
 			swap_chain_extent: None,
 			swap_chain_imgs: None,
-			swap_chain_img_views: None,
+			swap_chain_img_views: Some(Vec::new()), // not good
 			last_frame: Instant::now(),
 		}
 	}

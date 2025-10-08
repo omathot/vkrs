@@ -390,31 +390,42 @@ impl Application {
 		};
 	}
 	fn create_image_views(&mut self) {
-		self.swap_chain_img_views = Some(Vec::new()); // never gets intialized before, temp fix
-		self.swap_chain_img_views.as_mut().unwrap().clear();
+		// now gets initialized in app new, but still need to make that better
+		// self.swap_chain_img_views = Some(Vec::new()); // never gets intialized before, temp fix
 
-		let mut views_create_info = vk::ImageViewCreateInfo {
-			view_type: vk::ImageViewType::TYPE_2D,
-			format: self.swap_chain_format.unwrap(),
-			subresource_range: vk::ImageSubresourceRange {
-				aspect_mask: vk::ImageAspectFlags::COLOR,
-				base_mip_level: 0,
-				level_count: 1,
-				base_array_layer: 0,
-				layer_count: 1,
-			},
-			components: vk::ComponentMapping {
-				r: vk::ComponentSwizzle::IDENTITY,
-				g: vk::ComponentSwizzle::IDENTITY,
-				b: vk::ComponentSwizzle::IDENTITY,
-				a: vk::ComponentSwizzle::IDENTITY,
-			},
-			..Default::default()
-		};
-		self.swap_chain_imgs
+		self.swap_chain_img_views.as_mut().unwrap().clear();
+		let img_views: Vec<vk::ImageView> = self
+			.swap_chain_imgs
 			.as_ref()
 			.unwrap()
 			.iter()
-			.map(|&img| views_create_info.image(img));
+			.map(|&img| {
+				let view_create_info = vk::ImageViewCreateInfo {
+					image: img,
+					view_type: vk::ImageViewType::TYPE_2D,
+					format: self.swap_chain_format.unwrap(),
+					subresource_range: vk::ImageSubresourceRange {
+						aspect_mask: vk::ImageAspectFlags::COLOR,
+						base_mip_level: 0,
+						level_count: 1,
+						base_array_layer: 0,
+						layer_count: 1,
+					},
+					components: vk::ComponentMapping::default(),
+					..Default::default()
+				};
+				unsafe {
+					self.device
+						.as_ref()
+						.unwrap()
+						.create_image_view(&view_create_info, None)
+						.expect("Should have been able to create image view")
+				}
+			})
+			.collect();
+		self.swap_chain_img_views = Some(img_views);
+	}
+	fn create_graphics_pipeline(&mut self) {
+		//
 	}
 }

@@ -1,7 +1,7 @@
 use ash::ext::debug_utils;
 
 use super::{Application, ENABLE_VALIDATION_LAYERS, vk};
-use std::ffi::CStr;
+use std::ffi::{CStr, c_void};
 
 impl Application {
 	pub fn setup_debug_messenger(&mut self) {
@@ -38,7 +38,7 @@ impl Application {
 		msg_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
 		msg_type: vk::DebugUtilsMessageTypeFlagsEXT,
 		p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-		_p_user_data: *mut std::ffi::c_void,
+		_p_user_data: *mut c_void,
 	) -> vk::Bool32 {
 		let callback_data = unsafe { *p_callback_data };
 		let msg = unsafe { CStr::from_ptr(callback_data.p_message) }
