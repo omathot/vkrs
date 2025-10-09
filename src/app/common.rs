@@ -12,10 +12,11 @@ pub static VALIDATION_LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
 pub static WL_REQUIRED_EXTENSIONS: [&CStr; 2] =
 	[vk::KHR_SURFACE_NAME, vk::KHR_WAYLAND_SURFACE_NAME];
 
-pub static DEVICE_REQUIRED_EXTENSIONS: [&CStr; 3] = [
+pub static DEVICE_REQUIRED_EXTENSIONS: [&CStr; 4] = [
 	vk::KHR_SWAPCHAIN_NAME,
 	vk::KHR_SPIRV_1_4_NAME,
 	vk::KHR_SYNCHRONIZATION2_NAME,
+	vk::KHR_DYNAMIC_RENDERING_NAME,
 ];
 
 // the only purpose of this struct is to keep the CString alive as long as the *const c_char

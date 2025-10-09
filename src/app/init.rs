@@ -1,7 +1,7 @@
 use super::{Application, vk};
 use crate::common::*;
 use ash::khr::{surface, swapchain};
-use std::ffi::{CString, c_char};
+use std::ffi::{CString, c_char, c_void};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 impl Application {
@@ -131,7 +131,15 @@ impl Application {
 		}
 		let mut candidates: Vec<(u32, vk::PhysicalDevice, String)> = Vec::new();
 		for device in devices.into_iter() {
-			let features = unsafe { instance.get_physical_device_features(device) };
+			let mut vk11_features = vk::PhysicalDeviceVulkan11Features::default();
+			let mut features2 = vk::PhysicalDeviceFeatures2 {
+				p_next: &mut vk11_features as *const _ as *mut c_void,
+				..Default::default()
+			};
+			unsafe {
+				instance.get_physical_device_features2(device, &mut features2);
+			}
+			// let features = unsafe { instance.get_physical_device_features(device) };
 			let properties = unsafe { instance.get_physical_device_properties(device) };
 			let name = properties
 				.device_name_as_c_str()
@@ -145,8 +153,12 @@ impl Application {
 				score += 1000;
 			}
 			// requirements
-			if features.geometry_shader != vk::TRUE {
+			if features2.features.geometry_shader != vk::TRUE {
 				log::warn!("device {} does not have a geometry shader", name);
+				continue;
+			}
+			if vk11_features.shader_draw_parameters == vk::FALSE {
+				log::warn!("Device {} does not support shaderDrawParameters", name);
 				continue;
 			}
 			if !self.has_minimum_queue_families_reqs(device) {
@@ -155,7 +167,7 @@ impl Application {
 			}
 
 			score += properties.limits.max_image_dimension2_d;
-			if features.geometry_shader != vk::TRUE {
+			if features2.features.geometry_shader != vk::TRUE {
 				log::warn!("device {:?} has no geometry shader", name);
 				continue;
 			}
@@ -197,6 +209,10 @@ impl Application {
 			.iter()
 			.map(|ext| ext.as_ptr())
 			.collect();
+		let mut vk11_features = vk::PhysicalDeviceVulkan11Features {
+			shader_draw_parameters: vk::TRUE,
+			..Default::default()
+		};
 		let device_create_info = vk::DeviceCreateInfo {
 			p_queue_create_infos: &device_queue_create_info,
 			queue_create_info_count: 1,
@@ -205,7 +221,8 @@ impl Application {
 			..Default::default()
 		}
 		.push_next(&mut dynamic_rendering)
-		.push_next(&mut extended_dynamic_state);
+		.push_next(&mut extended_dynamic_state)
+		.push_next(&mut vk11_features);
 
 		self.device = unsafe {
 			Some(
@@ -434,13 +451,13 @@ impl Application {
 		let vert_shader_stage_info = vk::PipelineShaderStageCreateInfo {
 			stage: vk::ShaderStageFlags::VERTEX,
 			module: shader_module,
-			p_name: "vertMain".as_ptr(),
+			p_name: c"vertMain".as_ptr(),
 			..Default::default()
 		};
 		let frag_shader_stage_info = vk::PipelineShaderStageCreateInfo {
 			stage: vk::ShaderStageFlags::FRAGMENT,
 			module: shader_module,
-			p_name: "fragMain".as_ptr(),
+			p_name: c"fragMain".as_ptr(),
 			..Default::default()
 		};
 		let shader_stages = [vert_shader_stage_info, frag_shader_stage_info];
@@ -451,7 +468,11 @@ impl Application {
 			p_dynamic_states: dyn_states.as_ptr(),
 			..Default::default()
 		};
-		let vertex_input_info: vk::PipelineVertexInputStateCreateInfo;
+		let vertex_input_info = vk::PipelineVertexInputStateCreateInfo {
+			vertex_binding_description_count: 0,
+			vertex_attribute_description_count: 0,
+			..Default::default()
+		};
 		let input_asm_info = vk::PipelineInputAssemblyStateCreateInfo {
 			topology: vk::PrimitiveTopology::TRIANGLE_LIST,
 			..Default::default()
@@ -474,22 +495,76 @@ impl Application {
 		};
 		let multisampling_info = vk::PipelineMultisampleStateCreateInfo {
 			rasterization_samples: vk::SampleCountFlags::TYPE_1,
-			sample_shading_enable: vk::TRUE,
+			sample_shading_enable: vk::FALSE,
 			..Default::default()
 		};
-	}
-	fn create_shader_module(&self, code: &'static [u8]) -> vk::ShaderModule {
-		let create_info = vk::ShaderModuleCreateInfo {
-			code_size: code.len(),
-			p_code: code.as_ptr() as *const u32,
+		let color_blend_attachment = vk::PipelineColorBlendAttachmentState {
+			blend_enable: vk::TRUE,
+			color_write_mask: vk::ColorComponentFlags::R
+				| vk::ColorComponentFlags::G
+				| vk::ColorComponentFlags::B
+				| vk::ColorComponentFlags::A,
+			src_color_blend_factor: vk::BlendFactor::SRC_ALPHA,
+			dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+			color_blend_op: vk::BlendOp::ADD,
+			src_alpha_blend_factor: vk::BlendFactor::ONE,
+			dst_alpha_blend_factor: vk::BlendFactor::ZERO,
+			alpha_blend_op: vk::BlendOp::ADD,
 			..Default::default()
 		};
-		unsafe {
-			self.device
-				.as_ref()
-				.unwrap()
-				.create_shader_module(&create_info, None)
-				.expect("Should have been able to create shader module")
-		}
+		let color_blend_info = vk::PipelineColorBlendStateCreateInfo {
+			logic_op_enable: vk::FALSE,
+			logic_op: vk::LogicOp::COPY,
+			attachment_count: 1,
+			p_attachments: &color_blend_attachment,
+			..Default::default()
+		};
+		let pipeline_info = vk::PipelineLayoutCreateInfo {
+			set_layout_count: 0,
+			push_constant_range_count: 0,
+			..Default::default()
+		};
+
+		self.pipeline_layout = unsafe {
+			Some(
+				self.device
+					.as_ref()
+					.unwrap()
+					.create_pipeline_layout(&pipeline_info, None)
+					.expect("Should have been able to create pipeline layout"),
+			)
+		};
+		let pipeline_rendering_info = vk::PipelineRenderingCreateInfo {
+			color_attachment_count: 1,
+			p_color_attachment_formats: self.swap_chain_format.as_ref().unwrap(),
+			..Default::default()
+		};
+		let pipeline_info = vk::GraphicsPipelineCreateInfo {
+			p_next: &pipeline_rendering_info as *const _ as *const c_void, // cast to raw ptr (cursed)
+			stage_count: 2,
+			p_stages: shader_stages.as_ptr(),
+			p_vertex_input_state: &vertex_input_info,
+			p_input_assembly_state: &input_asm_info,
+			p_viewport_state: &viewport_info,
+			p_rasterization_state: &rasterizer_info,
+			p_multisample_state: &multisampling_info,
+			p_color_blend_state: &color_blend_info,
+			p_dynamic_state: &dyn_state_info,
+			layout: self.pipeline_layout.unwrap(),
+			render_pass: vk::RenderPass::null(),
+			..Default::default()
+		};
+		self.graphics_pipeline = unsafe {
+			Some(
+				self.device
+					.as_ref()
+					.unwrap()
+					.create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
+					.expect("Should have been able to greate graphics pipeline")
+					.into_iter()
+					.next()
+					.unwrap(), // consume the first in vec
+			)
+		};
 	}
 }

@@ -35,6 +35,9 @@ pub struct Application {
 	pub swap_chain_imgs: Option<Vec<vk::Image>>,
 	pub swap_chain_img_views: Option<Vec<vk::ImageView>>,
 
+	pub pipeline_layout: Option<vk::PipelineLayout>,
+	pub graphics_pipeline: Option<vk::Pipeline>,
+
 	pub last_frame: Instant,
 }
 
@@ -75,6 +78,8 @@ impl Application {
 			swap_chain_extent: None,
 			swap_chain_imgs: None,
 			swap_chain_img_views: Some(Vec::new()), // not good
+			pipeline_layout: None,
+			graphics_pipeline: None,
 			last_frame: Instant::now(),
 		}
 	}
