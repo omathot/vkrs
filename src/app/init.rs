@@ -14,6 +14,7 @@ impl Application {
 		self.find_queue_families();
 		self.create_swap_chain();
 		self.create_image_views();
+		self.create_graphics_pipeline();
 	}
 
 	fn create_instance(&mut self) {
@@ -426,6 +427,69 @@ impl Application {
 		self.swap_chain_img_views = Some(img_views);
 	}
 	fn create_graphics_pipeline(&mut self) {
-		//
+		// TODO: normalize path
+		let shader_code = include_bytes!("../../shaders/slang.spv");
+		debug_assert!(shader_code.len() > 0, "shader_code byte len <= 0");
+		let shader_module = self.create_shader_module(shader_code);
+		let vert_shader_stage_info = vk::PipelineShaderStageCreateInfo {
+			stage: vk::ShaderStageFlags::VERTEX,
+			module: shader_module,
+			p_name: "vertMain".as_ptr(),
+			..Default::default()
+		};
+		let frag_shader_stage_info = vk::PipelineShaderStageCreateInfo {
+			stage: vk::ShaderStageFlags::FRAGMENT,
+			module: shader_module,
+			p_name: "fragMain".as_ptr(),
+			..Default::default()
+		};
+		let shader_stages = [vert_shader_stage_info, frag_shader_stage_info];
+
+		let dyn_states = [vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT];
+		let dyn_state_info = vk::PipelineDynamicStateCreateInfo {
+			dynamic_state_count: dyn_states.len() as u32,
+			p_dynamic_states: dyn_states.as_ptr(),
+			..Default::default()
+		};
+		let vertex_input_info: vk::PipelineVertexInputStateCreateInfo;
+		let input_asm_info = vk::PipelineInputAssemblyStateCreateInfo {
+			topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+			..Default::default()
+		};
+		let viewport_info = vk::PipelineViewportStateCreateInfo {
+			viewport_count: 1,
+			scissor_count: 1,
+			..Default::default()
+		};
+		let rasterizer_info = vk::PipelineRasterizationStateCreateInfo {
+			depth_clamp_enable: vk::FALSE,
+			rasterizer_discard_enable: vk::FALSE,
+			polygon_mode: vk::PolygonMode::FILL,
+			cull_mode: vk::CullModeFlags::BACK,
+			front_face: vk::FrontFace::CLOCKWISE,
+			depth_bias_enable: vk::FALSE,
+			depth_bias_slope_factor: 1.,
+			line_width: 1.,
+			..Default::default()
+		};
+		let multisampling_info = vk::PipelineMultisampleStateCreateInfo {
+			rasterization_samples: vk::SampleCountFlags::TYPE_1,
+			sample_shading_enable: vk::TRUE,
+			..Default::default()
+		};
+	}
+	fn create_shader_module(&self, code: &'static [u8]) -> vk::ShaderModule {
+		let create_info = vk::ShaderModuleCreateInfo {
+			code_size: code.len(),
+			p_code: code.as_ptr() as *const u32,
+			..Default::default()
+		};
+		unsafe {
+			self.device
+				.as_ref()
+				.unwrap()
+				.create_shader_module(&create_info, None)
+				.expect("Should have been able to create shader module")
+		}
 	}
 }
