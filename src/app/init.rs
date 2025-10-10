@@ -15,6 +15,8 @@ impl Application {
 		self.create_swap_chain();
 		self.create_image_views();
 		self.create_graphics_pipeline();
+		self.create_command_pool();
+		self.create_command_buff();
 	}
 
 	fn create_instance(&mut self) {
@@ -184,7 +186,6 @@ impl Application {
 
 	fn create_logical_device(&mut self) {
 		let instance = self.instance.as_ref().unwrap();
-		let loader = self.surface_loader.as_ref().unwrap();
 		let phys_device = self.physical_device.unwrap();
 
 		// queue
@@ -560,11 +561,51 @@ impl Application {
 					.as_ref()
 					.unwrap()
 					.create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
-					.expect("Should have been able to greate graphics pipeline")
-					.into_iter()
-					.next()
-					.unwrap(), // consume the first in vec
+					.expect("Should have been able to greate graphics pipeline")[0], // only creating one for now
 			)
+		};
+	}
+	fn create_command_pool(&mut self) {
+		let pool_info = vk::CommandPoolCreateInfo {
+			flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
+			queue_family_index: self.graphics_index,
+			..Default::default()
+		};
+		self.command_pool = unsafe {
+			Some(
+				self.device
+					.as_ref()
+					.unwrap()
+					.create_command_pool(&pool_info, None)
+					.expect("Should have been able to create command pool"),
+			)
+		};
+	}
+	fn create_command_buff(&mut self) {
+		let alloc_info = vk::CommandBufferAllocateInfo {
+			command_pool: self.command_pool.unwrap(),
+			level: vk::CommandBufferLevel::PRIMARY,
+			command_buffer_count: 1,
+			..Default::default()
+		};
+		self.command_buff = unsafe {
+			Some(
+				self.device
+					.as_ref()
+					.unwrap()
+					.allocate_command_buffers(&alloc_info)
+					.expect("Should have been able to allocate command buff")[0], // only creating one for now
+			)
+		};
+	}
+	fn record_command_buff(&mut self, img_idx: u32) {
+		let cmd_buff = self.command_buff.unwrap();
+		let device = self.device.as_ref().unwrap();
+
+		unsafe {
+			device
+				.begin_command_buffer(cmd_buff, &vk::CommandBufferBeginInfo::default())
+				.expect("Should have been able to begin command_buffer")
 		};
 	}
 }

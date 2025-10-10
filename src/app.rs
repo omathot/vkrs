@@ -38,6 +38,9 @@ pub struct Application {
 	pub pipeline_layout: Option<vk::PipelineLayout>,
 	pub graphics_pipeline: Option<vk::Pipeline>,
 
+	pub command_pool: Option<vk::CommandPool>, // manages the memory used to store buffers
+	pub command_buff: Option<vk::CommandBuffer>,
+
 	pub last_frame: Instant,
 }
 
@@ -80,6 +83,8 @@ impl Application {
 			swap_chain_img_views: Some(Vec::new()), // not good
 			pipeline_layout: None,
 			graphics_pipeline: None,
+			command_pool: None,
+			command_buff: None,
 			last_frame: Instant::now(),
 		}
 	}
