@@ -28,12 +28,12 @@ pub struct Application {
 	pub surface_loader: Option<surface::Instance>,
 	pub surface: Option<vk::SurfaceKHR>,
 
-	pub swap_chain_device: Option<swapchain::Device>,
-	pub swap_chain: Option<vk::SwapchainKHR>,
-	pub swap_chain_format: Option<vk::Format>,
-	pub swap_chain_extent: Option<vk::Extent2D>,
-	pub swap_chain_imgs: Option<Vec<vk::Image>>,
-	pub swap_chain_img_views: Option<Vec<vk::ImageView>>,
+	pub swapchain_device: Option<swapchain::Device>,
+	pub swapchain: Option<vk::SwapchainKHR>,
+	pub swapchain_format: Option<vk::Format>,
+	pub swapchain_extent: Option<vk::Extent2D>,
+	pub swapchain_imgs: Option<Vec<vk::Image>>,
+	pub swapchain_img_views: Option<Vec<vk::ImageView>>,
 
 	pub pipeline_layout: Option<vk::PipelineLayout>,
 	pub graphics_pipeline: Option<vk::Pipeline>,
@@ -46,6 +46,11 @@ pub struct Application {
 
 impl Application {
 	pub fn new() -> Application {
+		env_logger::builder()
+			.filter_module("lvkrs", log::LevelFilter::Info)
+			.format_timestamp(None)
+			.init();
+
 		log::info!("Building application!");
 		let entry = Entry::linked();
 		#[cfg(debug_assertions)]
@@ -75,12 +80,12 @@ impl Application {
 			graphics_queue: None,
 			surface_loader: None,
 			surface: None,
-			swap_chain_device: None,
-			swap_chain: None,
-			swap_chain_format: None,
-			swap_chain_extent: None,
-			swap_chain_imgs: None,
-			swap_chain_img_views: Some(Vec::new()), // not good
+			swapchain_device: None,
+			swapchain: None,
+			swapchain_format: None,
+			swapchain_extent: None,
+			swapchain_imgs: None,
+			swapchain_img_views: Some(Vec::new()), // not good
 			pipeline_layout: None,
 			graphics_pipeline: None,
 			command_pool: None,
@@ -89,7 +94,7 @@ impl Application {
 		}
 	}
 	pub fn update(&self, dt: f32) {}
-	pub fn render(&self) {}
+	pub fn draw_frame(&self) {}
 	pub fn cleanup(&mut self) {
 		if let (Some(loader), Some(messenger)) = (&self.debug_utils_loader, self.debug_messenger) {
 			unsafe { loader.destroy_debug_utils_messenger(messenger, None) };
@@ -97,11 +102,11 @@ impl Application {
 		if let (Some(surface), Some(loader)) = (self.surface, &self.surface_loader) {
 			unsafe { loader.destroy_surface(surface, None) };
 		}
-		if let (Some(swapchain), Some(swap_device)) = (self.swap_chain, &self.swap_chain_device) {
+		if let (Some(swapchain), Some(swap_device)) = (self.swapchain, &self.swapchain_device) {
 			unsafe { swap_device.destroy_swapchain(swapchain, None) };
 		}
 		if let Some(device) = &self.device {
-			if let Some(images) = &self.swap_chain_imgs {
+			if let Some(images) = &self.swapchain_imgs {
 				unsafe {
 					images
 						.iter()

@@ -1,7 +1,10 @@
 use super::{Application, vk};
 use crate::common::*;
 use ash::khr::{surface, swapchain};
-use std::ffi::{CString, c_char, c_void};
+use std::{
+	any::Any,
+	ffi::{CString, c_char, c_void},
+};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 impl Application {
@@ -12,7 +15,7 @@ impl Application {
 		self.pick_physical_device();
 		self.create_logical_device();
 		self.find_queue_families();
-		self.create_swap_chain();
+		self.create_swapchain();
 		self.create_image_views();
 		self.create_graphics_pipeline();
 		self.create_command_pool();
@@ -133,7 +136,12 @@ impl Application {
 		}
 		let mut candidates: Vec<(u32, vk::PhysicalDevice, String)> = Vec::new();
 		for device in devices.into_iter() {
-			let mut vk11_features = vk::PhysicalDeviceVulkan11Features::default();
+			// query device features
+			let mut vk12_features = vk::PhysicalDeviceVulkan12Features::default();
+			let mut vk11_features = vk::PhysicalDeviceVulkan11Features {
+				p_next: &mut vk12_features as *const _ as *mut c_void,
+				..Default::default()
+			};
 			let mut features2 = vk::PhysicalDeviceFeatures2 {
 				p_next: &mut vk11_features as *const _ as *mut c_void,
 				..Default::default()
@@ -141,7 +149,7 @@ impl Application {
 			unsafe {
 				instance.get_physical_device_features2(device, &mut features2);
 			}
-			// let features = unsafe { instance.get_physical_device_features(device) };
+
 			let properties = unsafe { instance.get_physical_device_properties(device) };
 			let name = properties
 				.device_name_as_c_str()
@@ -159,8 +167,16 @@ impl Application {
 				log::warn!("device {} does not have a geometry shader", name);
 				continue;
 			}
+			if features2.features.geometry_shader != vk::TRUE {
+				log::warn!("device {:?} has no geometry shader", name);
+				continue;
+			}
 			if vk11_features.shader_draw_parameters == vk::FALSE {
 				log::warn!("Device {} does not support shaderDrawParameters", name);
+				continue;
+			}
+			if vk12_features.buffer_device_address != vk::TRUE {
+				log::warn!("Device {} does not support bufferDeviceAddress ext", name);
 				continue;
 			}
 			if !self.has_minimum_queue_families_reqs(device) {
@@ -169,10 +185,6 @@ impl Application {
 			}
 
 			score += properties.limits.max_image_dimension2_d;
-			if features2.features.geometry_shader != vk::TRUE {
-				log::warn!("device {:?} has no geometry shader", name);
-				continue;
-			}
 			candidates.push((score, device, name));
 		}
 		if candidates.is_empty() {
@@ -214,6 +226,10 @@ impl Application {
 			shader_draw_parameters: vk::TRUE,
 			..Default::default()
 		};
+		let mut vk12_features = vk::PhysicalDeviceVulkan12Features {
+			buffer_device_address: vk::TRUE,
+			..Default::default()
+		};
 		let device_create_info = vk::DeviceCreateInfo {
 			p_queue_create_infos: &device_queue_create_info,
 			queue_create_info_count: 1,
@@ -223,7 +239,8 @@ impl Application {
 		}
 		.push_next(&mut dynamic_rendering)
 		.push_next(&mut extended_dynamic_state)
-		.push_next(&mut vk11_features);
+		.push_next(&mut vk11_features)
+		.push_next(&mut vk12_features);
 
 		self.device = unsafe {
 			Some(
@@ -330,7 +347,7 @@ impl Application {
 		);
 	}
 
-	fn create_swap_chain(&mut self) {
+	fn create_swapchain(&mut self) {
 		let loader = self.surface_loader.as_ref().unwrap();
 		let phys_device = self.physical_device.unwrap();
 		let surface = self.surface.unwrap();
@@ -352,8 +369,8 @@ impl Application {
 		};
 
 		let format = self.choose_swap_format(&formats);
-		self.swap_chain_format = Some(format.format);
-		self.swap_chain_extent = Some(self.choose_swap_extent(&capabilities));
+		self.swapchain_format = Some(format.format);
+		self.swapchain_extent = Some(self.choose_swap_extent(&capabilities));
 		let present_mode = self.choose_swap_present_mode(&present_modes);
 		let mut img_count = capabilities.min_image_count + 1;
 		if capabilities.max_image_count > 0 && img_count > capabilities.max_image_count {
@@ -366,7 +383,7 @@ impl Application {
 			min_image_count: img_count,
 			image_format: format.format,
 			image_color_space: format.color_space,
-			image_extent: self.swap_chain_extent.unwrap(),
+			image_extent: self.swapchain_extent.unwrap(),
 			image_array_layers: 1, // always 1 unless doing stereostopic 3d app
 			image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
 			image_sharing_mode: vk::SharingMode::EXCLUSIVE, // assume same family for present and graphics
@@ -388,33 +405,33 @@ impl Application {
 		}
 
 		let instance = self.instance.as_ref().unwrap();
-		self.swap_chain_device = Some(swapchain::Device::new(
+		self.swapchain_device = Some(swapchain::Device::new(
 			instance,
 			self.device.as_ref().unwrap(),
 		));
-		let swap_device = self.swap_chain_device.as_ref().unwrap();
-		self.swap_chain = unsafe {
+		let swap_device = self.swapchain_device.as_ref().unwrap();
+		self.swapchain = unsafe {
 			Some(
 				swap_device
 					.create_swapchain(&swapchain_create_info, None)
 					.expect("Should have been able to create swapchain"),
 			)
 		};
-		self.swap_chain_imgs = unsafe {
+		self.swapchain_imgs = unsafe {
 			Some(
 				swap_device
-					.get_swapchain_images(self.swap_chain.unwrap())
+					.get_swapchain_images(self.swapchain.unwrap())
 					.expect("Should have been able to get swapchain images"),
 			)
 		};
 	}
 	fn create_image_views(&mut self) {
 		// now gets initialized in app new, but still need to make that better
-		// self.swap_chain_img_views = Some(Vec::new()); // never gets intialized before, temp fix
+		// self.swapchain_img_views = Some(Vec::new()); // never gets intialized before, temp fix
 
-		self.swap_chain_img_views.as_mut().unwrap().clear();
+		self.swapchain_img_views.as_mut().unwrap().clear();
 		let img_views: Vec<vk::ImageView> = self
-			.swap_chain_imgs
+			.swapchain_imgs
 			.as_ref()
 			.unwrap()
 			.iter()
@@ -422,7 +439,7 @@ impl Application {
 				let view_create_info = vk::ImageViewCreateInfo {
 					image: img,
 					view_type: vk::ImageViewType::TYPE_2D,
-					format: self.swap_chain_format.unwrap(),
+					format: self.swapchain_format.unwrap(),
 					subresource_range: vk::ImageSubresourceRange {
 						aspect_mask: vk::ImageAspectFlags::COLOR,
 						base_mip_level: 0,
@@ -442,7 +459,7 @@ impl Application {
 				}
 			})
 			.collect();
-		self.swap_chain_img_views = Some(img_views);
+		self.swapchain_img_views = Some(img_views);
 	}
 	fn create_graphics_pipeline(&mut self) {
 		// TODO: normalize path
@@ -537,7 +554,7 @@ impl Application {
 		};
 		let pipeline_rendering_info = vk::PipelineRenderingCreateInfo {
 			color_attachment_count: 1,
-			p_color_attachment_formats: self.swap_chain_format.as_ref().unwrap(),
+			p_color_attachment_formats: self.swapchain_format.as_ref().unwrap(),
 			..Default::default()
 		};
 		let pipeline_info = vk::GraphicsPipelineCreateInfo {
@@ -598,14 +615,104 @@ impl Application {
 			)
 		};
 	}
-	fn record_command_buff(&mut self, img_idx: u32) {
+	fn record_command_buff(&self, img_idx: u32) {
 		let cmd_buff = self.command_buff.unwrap();
 		let device = self.device.as_ref().unwrap();
+		let extent = self.swapchain_extent.unwrap();
 
 		unsafe {
 			device
 				.begin_command_buffer(cmd_buff, &vk::CommandBufferBeginInfo::default())
 				.expect("Should have been able to begin command_buffer")
+		};
+		// before starting to render, transfer swapchain image to COLOR_ATTACHMENT_OPTIMAL
+		self.transition_img_layout(
+			img_idx,
+			vk::ImageLayout::UNDEFINED,
+			vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+			vk::AccessFlags2::empty(), // src access mask (no need to wait for previous op)
+			vk::AccessFlags2::COLOR_ATTACHMENT_WRITE, // dst access mask
+			vk::PipelineStageFlags2::TOP_OF_PIPE, // src stage
+			vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT, // dst stage
+		);
+		// vk::ClearValue is a union expression, can only hold one field
+		let clear_color = vk::ClearValue {
+			color: vk::ClearColorValue {
+				float32: [0., 0., 0., 1.],
+			},
+		};
+		let attachment_info = vk::RenderingAttachmentInfo {
+			image_view: *self
+				.swapchain_img_views
+				.as_ref()
+				.unwrap()
+				.get(img_idx as usize)
+				.expect("img_idx should always be valid for swapchain img views"),
+			image_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+			load_op: vk::AttachmentLoadOp::CLEAR,
+			store_op: vk::AttachmentStoreOp::STORE,
+			clear_value: clear_color,
+			..Default::default()
+		};
+		let render_info = vk::RenderingInfo {
+			render_area: vk::Rect2D {
+				offset: vk::Offset2D { x: 0, y: 0 },
+				extent: extent,
+			},
+			layer_count: 1,
+			color_attachment_count: 1,
+			p_color_attachments: &attachment_info,
+			..Default::default()
+		};
+
+		unsafe {
+			// begin rendering
+			device.cmd_begin_rendering(cmd_buff, &render_info);
+			// bind pipeline
+			device.cmd_bind_pipeline(
+				cmd_buff,
+				vk::PipelineBindPoint::GRAPHICS,
+				self.graphics_pipeline.unwrap(),
+			);
+			// set dynamic states
+			device.cmd_set_viewport(
+				cmd_buff,
+				0,
+				&[vk::Viewport {
+					x: 0.,
+					y: 0.,
+					width: extent.width as f32,
+					height: extent.height as f32,
+					min_depth: 0.,
+					max_depth: 1.,
+				}],
+			);
+			device.cmd_set_scissor(
+				cmd_buff,
+				0,
+				&[vk::Rect2D {
+					offset: vk::Offset2D { x: 0, y: 0 },
+					extent: extent,
+				}],
+			);
+
+			device.cmd_draw(cmd_buff, 3, 1, 0, 0);
+			device.cmd_end_rendering(cmd_buff);
+		};
+		// transition back to present to screen
+		self.transition_img_layout(
+			img_idx,
+			vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+			vk::ImageLayout::PRESENT_SRC_KHR,
+			vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
+			vk::AccessFlags2::empty(),
+			vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+			vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+		);
+		unsafe {
+			device
+				.end_command_buffer(cmd_buff)
+				.expect("Should have been able to end cmd buff")
 		};
 	}
 }

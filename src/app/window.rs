@@ -37,11 +37,10 @@ impl ApplicationHandler for Application {
 				let now = Instant::now();
 				let dt = now.duration_since(self.last_frame).as_secs_f32();
 				self.last_frame = now;
-
 				// game logic
 				self.update(dt);
 				// render
-				self.render();
+				self.draw_frame();
 				if let Some(window) = &self.window {
 					window.request_redraw();
 				}
