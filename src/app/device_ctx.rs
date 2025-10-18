@@ -1,6 +1,6 @@
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
-use super::{Device, Instance, InstanceContext, Window, common::*, surface, vk};
+use super::{common::*, surface, vk, Device, Instance, InstanceContext, Window};
 use std::ffi::{c_char, c_void};
 
 pub struct DeviceContext {
@@ -163,7 +163,7 @@ impl DeviceContext {
 			..Default::default()
 		};
 		// device extensions
-		let device_extensions: Vec<*const c_char> = DEVICE_REQUIRED_EXTENSIONS
+		let device_extensions: Vec<*const c_char> = REQUIRED_DEVICE_EXTENSIONS
 			.iter()
 			.map(|ext| ext.as_ptr())
 			.collect();
@@ -178,7 +178,7 @@ impl DeviceContext {
 		let device_create_info = vk::DeviceCreateInfo {
 			p_queue_create_infos: &device_queue_create_info,
 			queue_create_info_count: 1,
-			enabled_extension_count: DEVICE_REQUIRED_EXTENSIONS.len() as u32,
+			enabled_extension_count: REQUIRED_DEVICE_EXTENSIONS.len() as u32,
 			pp_enabled_extension_names: device_extensions.as_ptr(),
 			..Default::default()
 		}

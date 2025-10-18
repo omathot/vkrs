@@ -42,6 +42,8 @@ impl InstanceContext {
 			pp_enabled_layer_names: required_layers.as_ptr(),
 			enabled_extension_count: required_extensions.len() as u32,
 			pp_enabled_extension_names: required_extensions.as_ptr(),
+			#[cfg(target_os = "macos")]
+			flags: vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR,
 			..Default::default()
 		};
 
@@ -99,7 +101,7 @@ impl InstanceContext {
 	}
 
 	fn get_required_extensions() -> Vec<*const c_char> {
-		let mut extension_names = WL_REQUIRED_EXTENSIONS.to_vec();
+		let mut extension_names = REQUIRED_INSTANCE_EXTENSIONS.to_vec();
 		if ENABLE_VALIDATION_LAYERS {
 			extension_names.push(vk::EXT_DEBUG_UTILS_NAME);
 		}
