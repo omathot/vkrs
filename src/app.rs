@@ -6,18 +6,45 @@ use std::time::Instant;
 use winit::window::Window;
 
 pub mod common;
+pub mod device_ctx;
 pub mod helpers;
 pub mod init;
+pub mod instance_ctx;
+pub mod pipeline_ctx;
+pub mod swapchain_ctx;
 pub mod utils;
 pub mod window;
 pub use common::*;
+pub use device_ctx::DeviceContext;
+pub use instance_ctx::InstanceContext;
+pub use pipeline_ctx::PipelineContext;
+pub use swapchain_ctx::SwapchainContext;
+
+pub struct VkCore {
+	pub instance_ctx: InstanceContext,
+	pub device_ctx: DeviceContext,
+	pub pipeline_ctx: PipelineContext,
+}
+impl VkCore {
+	pub fn new(window: &Window) {
+		let instance_ctx = InstanceContext::new();
+		let device_ctx = DeviceContext::new(&instance_ctx, window);
+	}
+}
+
+pub struct VkSwap {
+	pub surface: Option<vk::SurfaceKHR>,
+	pub swapchain_ctx: SwapchainContext,
+}
+impl VkSwap {
+	pub fn new() {}
+}
 
 pub struct Application {
-	pub entry: Entry,
-	pub instance: Option<Instance>,
 	pub window: Option<Window>,
-	pub debug_utils_loader: Option<debug_utils::Instance>,
-	pub debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
+
+	vk: Option<VkCore>,
+	vk_swapchain: Option<VkSwap>,
 
 	pub physical_device: Option<vk::PhysicalDevice>,
 	pub device: Option<Device>, // logical connection - 'i am running vk on this physical device'
@@ -52,27 +79,13 @@ impl Application {
 			.init();
 
 		log::info!("Building application!");
-		let entry = Entry::linked();
-		#[cfg(debug_assertions)]
-		{
-			// query all extensions
-			let available_extensions = unsafe {
-				entry
-					.enumerate_instance_extension_properties(None)
-					.expect("Should have been able to get instance extension properties")
-			};
-			log::info!("{} available extensions:", available_extensions.len());
-			available_extensions.iter().for_each(|extension| {
-				log::info!("\t{:?}", extension.extension_name_as_c_str().unwrap())
-			});
-			println!("");
-		}
 		Application {
-			entry,
-			instance: None,
 			window: None,
-			debug_utils_loader: None,
-			debug_messenger: None,
+			vk: None,
+			vk_swapchain: None,
+
+			last_frame: Instant::now(),
+
 			physical_device: None,
 			device: None,
 			graphics_index: 0,
@@ -90,33 +103,42 @@ impl Application {
 			graphics_pipeline: None,
 			command_pool: None,
 			command_buff: None,
-			last_frame: Instant::now(),
 		}
+	}
+	pub fn vk(&self) -> &VkCore {
+		self.vk
+			.as_ref()
+			.expect("VkCore should have been initialized")
+	}
+	pub fn vk_swap(&self) -> &VkSwap {
+		self.vk_swapchain
+			.as_ref()
+			.expect("VkSwap should have been initialized")
 	}
 	pub fn update(&self, dt: f32) {}
 	pub fn draw_frame(&self) {}
 	pub fn cleanup(&mut self) {
-		if let (Some(loader), Some(messenger)) = (&self.debug_utils_loader, self.debug_messenger) {
-			unsafe { loader.destroy_debug_utils_messenger(messenger, None) };
-		}
-		if let (Some(surface), Some(loader)) = (self.surface, &self.surface_loader) {
-			unsafe { loader.destroy_surface(surface, None) };
-		}
-		if let (Some(swapchain), Some(swap_device)) = (self.swapchain, &self.swapchain_device) {
-			unsafe { swap_device.destroy_swapchain(swapchain, None) };
-		}
-		if let Some(device) = &self.device {
-			if let Some(images) = &self.swapchain_imgs {
-				unsafe {
-					images
-						.iter()
-						.for_each(|img| device.destroy_image(*img, None));
-				}
-			}
-			unsafe { device.destroy_device(None) };
-		}
-		if let Some(instance) = &self.instance {
-			unsafe { instance.destroy_instance(None) };
-		}
+		// if let (Some(loader), Some(messenger)) = (&self.debug_utils_loader, self.debug_messenger) {
+		// 	unsafe { loader.destroy_debug_utils_messenger(messenger, None) };
+		// }
+		// if let (Some(surface), Some(loader)) = (self.surface, &self.surface_loader) {
+		// 	unsafe { loader.destroy_surface(surface, None) };
+		// }
+		// if let (Some(swapchain), Some(swap_device)) = (self.swapchain, &self.swapchain_device) {
+		// 	unsafe { swap_device.destroy_swapchain(swapchain, None) };
+		// }
+		// if let Some(device) = &self.device {
+		// 	if let Some(images) = &self.swapchain_imgs {
+		// 		unsafe {
+		// 			images
+		// 				.iter()
+		// 				.for_each(|img| device.destroy_image(*img, None));
+		// 		}
+		// 	}
+		// 	unsafe { device.destroy_device(None) };
+		// }
+		// if let Some(instance) = &self.instance {
+		// 	unsafe { instance.destroy_instance(None) };
+		// }
 	}
 }

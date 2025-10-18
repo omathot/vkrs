@@ -13,3 +13,7 @@ log = "0.4.27"
 thiserror = "2.0.16"
 vk-mem = "0.5.0"
 winit = "0.30.12"
+
+[features]
+default = ["validation"]
+validation = []

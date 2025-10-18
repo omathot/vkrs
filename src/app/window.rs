@@ -1,4 +1,4 @@
-use super::{Application, Instant};
+use super::{Application, Instant, VkCore, VkSwap};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
@@ -15,11 +15,21 @@ impl ApplicationHandler for Application {
 					.expect("Should have been able to create window from event loop"),
 			);
 		}
-		if self.instance.is_none() {
-			Application::init_vulkan(self);
+		// Permanent VK
+		if self.vk.is_none() {
+			VkCore::new(self.window.as_ref().unwrap());
 		}
+		// recreates on each resumed signal
+		if self.vk_swapchain.is_none() {
+			VkSwap::new();
+		}
+		// if self.instance.is_none() {
+		// 	Application::init_vulkan(self);
+		// }
 	}
-	fn suspended(&mut self, event_loop: &ActiveEventLoop) {}
+	fn suspended(&mut self, event_loop: &ActiveEventLoop) {
+		// TODO: Cleanup non persistent vk objects (surface, imgs, swapchain)
+	}
 	fn window_event(
 		&mut self,
 		event_loop: &ActiveEventLoop,
