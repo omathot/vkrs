@@ -23,12 +23,9 @@ impl ApplicationHandler for Application {
 		if self.vk_swapchain.is_none() {
 			VkSwap::new();
 		}
-		// if self.instance.is_none() {
-		// 	Application::init_vulkan(self);
-		// }
 	}
 	fn suspended(&mut self, event_loop: &ActiveEventLoop) {
-		// TODO: Cleanup non persistent vk objects (surface, imgs, swapchain)
+		// TODO: Cleanup non persistent vk objects (surface, imgs, swapchain) VkSwap
 	}
 	fn window_event(
 		&mut self,

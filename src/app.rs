@@ -7,7 +7,6 @@ use winit::window::Window;
 
 pub mod common;
 pub mod device_ctx;
-pub mod helpers;
 pub mod init;
 pub mod instance_ctx;
 pub mod pipeline_ctx;
@@ -26,9 +25,16 @@ pub struct VkCore {
 	pub pipeline_ctx: PipelineContext,
 }
 impl VkCore {
-	pub fn new(window: &Window) {
+	pub fn new(window: &Window) -> VkCore {
 		let instance_ctx = InstanceContext::new();
 		let device_ctx = DeviceContext::new(&instance_ctx, window);
+		let pipeline_ctx = PipelineContext::new(&device_ctx);
+
+		VkCore {
+			instance_ctx,
+			device_ctx,
+			pipeline_ctx,
+		}
 	}
 }
 
@@ -45,14 +51,8 @@ pub struct Application {
 
 	vk: Option<VkCore>,
 	vk_swapchain: Option<VkSwap>,
+	pub last_frame: Instant,
 
-	pub physical_device: Option<vk::PhysicalDevice>,
-	pub device: Option<Device>, // logical connection - 'i am running vk on this physical device'
-	pub graphics_index: u32,
-	pub present_index: u32,
-	pub graphics_queue: Option<vk::Queue>,
-
-	pub surface_loader: Option<surface::Instance>,
 	pub surface: Option<vk::SurfaceKHR>,
 
 	pub swapchain_device: Option<swapchain::Device>,
@@ -61,14 +61,6 @@ pub struct Application {
 	pub swapchain_extent: Option<vk::Extent2D>,
 	pub swapchain_imgs: Option<Vec<vk::Image>>,
 	pub swapchain_img_views: Option<Vec<vk::ImageView>>,
-
-	pub pipeline_layout: Option<vk::PipelineLayout>,
-	pub graphics_pipeline: Option<vk::Pipeline>,
-
-	pub command_pool: Option<vk::CommandPool>, // manages the memory used to store buffers
-	pub command_buff: Option<vk::CommandBuffer>,
-
-	pub last_frame: Instant,
 }
 
 impl Application {
@@ -86,12 +78,6 @@ impl Application {
 
 			last_frame: Instant::now(),
 
-			physical_device: None,
-			device: None,
-			graphics_index: 0,
-			present_index: 0,
-			graphics_queue: None,
-			surface_loader: None,
 			surface: None,
 			swapchain_device: None,
 			swapchain: None,
@@ -99,10 +85,6 @@ impl Application {
 			swapchain_extent: None,
 			swapchain_imgs: None,
 			swapchain_img_views: Some(Vec::new()), // not good
-			pipeline_layout: None,
-			graphics_pipeline: None,
-			command_pool: None,
-			command_buff: None,
 		}
 	}
 	pub fn vk(&self) -> &VkCore {

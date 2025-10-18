@@ -26,9 +26,9 @@ impl DeviceContext {
 			.expect("Should have been able to make tmp surface for device creation")
 		};
 
-		let physical_device = DeviceContext::pick_physical_device(instance_ctx, &tmp_surface);
+		let physical_device = DeviceContext::pick_physical_device(instance_ctx, tmp_surface);
 		let (graphics_idx, present_idx) =
-			DeviceContext::find_queue_families(instance_ctx, &physical_device, &tmp_surface);
+			DeviceContext::find_queue_families(instance_ctx, physical_device, tmp_surface);
 
 		let device = DeviceContext::create_logical_device(
 			instance_ctx.instance(),
@@ -51,10 +51,16 @@ impl DeviceContext {
 			graphics_queue,
 		}
 	}
+	pub fn device(&self) -> &Device {
+		&self.device
+	}
+	pub fn phys_device(&self) -> vk::PhysicalDevice {
+		self.physical_device
+	}
 
 	fn pick_physical_device(
 		instance_ctx: &InstanceContext,
-		tmp_surface: &vk::SurfaceKHR,
+		tmp_surface: vk::SurfaceKHR,
 	) -> vk::PhysicalDevice {
 		let instance = instance_ctx.instance();
 		let surface_loader = instance_ctx.surface_loader();
@@ -193,7 +199,7 @@ impl DeviceContext {
 		instance: &Instance,
 		device: vk::PhysicalDevice,
 		surface_loader: &surface::Instance,
-		tmp_surface: &vk::SurfaceKHR,
+		tmp_surface: vk::SurfaceKHR,
 	) -> bool {
 		let queue_family_properties =
 			unsafe { instance.get_physical_device_queue_family_properties(device) };
@@ -205,7 +211,7 @@ impl DeviceContext {
 			.enumerate()
 			.any(|(idx, _)| unsafe {
 				surface_loader
-					.get_physical_device_surface_support(device, idx as u32, *tmp_surface)
+					.get_physical_device_surface_support(device, idx as u32, tmp_surface)
 					.expect("Should be able to check for present support")
 			});
 
@@ -214,19 +220,19 @@ impl DeviceContext {
 
 	fn find_queue_families(
 		instance_ctx: &InstanceContext,
-		phys_device: &vk::PhysicalDevice,
-		tmp_surface: &vk::SurfaceKHR,
+		phys_device: vk::PhysicalDevice,
+		tmp_surface: vk::SurfaceKHR,
 	) -> (u32, u32) {
 		let instance = instance_ctx.instance();
 		let surface_loader = instance_ctx.surface_loader();
 
 		let queue_family_properties =
-			unsafe { instance.get_physical_device_queue_family_properties(*phys_device) };
+			unsafe { instance.get_physical_device_queue_family_properties(phys_device) };
 
 		let supports_present = |index: usize| -> bool {
 			unsafe {
 				surface_loader
-					.get_physical_device_surface_support(*phys_device, index as u32, *tmp_surface)
+					.get_physical_device_surface_support(phys_device, index as u32, tmp_surface)
 					.unwrap_or(false)
 			}
 		};

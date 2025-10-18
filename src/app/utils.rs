@@ -43,11 +43,11 @@ impl Application {
 			p_image_memory_barriers: &barrier,
 			..Default::default()
 		};
-		unsafe {
-			self.device
-				.as_ref()
-				.unwrap()
-				.cmd_pipeline_barrier2(self.command_buff.unwrap(), &deps_info);
-		}
+		// unsafe {
+		// 	self.device
+		// 		.as_ref()
+		// 		.unwrap()
+		// 		.cmd_pipeline_barrier2(self.command_buff.unwrap(), &deps_info);
+		// }
 	}
 }
