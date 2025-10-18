@@ -17,11 +17,17 @@ impl ApplicationHandler for Application {
 		}
 		// Permanent VK
 		if self.vk.is_none() {
-			VkCore::new(self.window.as_ref().unwrap());
+			self.vk = Some(VkCore::new(self.window.as_ref().unwrap()));
+			log::info!("Built VkCore!");
 		}
 		// recreates on each resumed signal
-		if self.vk_swapchain.is_none() {
-			VkSwap::new();
+		if self.vk_swap.is_none() {
+			self.vk_swap = Some(VkSwap::new(
+				self.window.as_ref().unwrap(),
+				&self.vk.as_ref().unwrap().instance_ctx,
+				&self.vk.as_ref().unwrap().device_ctx,
+			));
+			log::info!("Built VkSwap!");
 		}
 	}
 	fn suspended(&mut self, event_loop: &ActiveEventLoop) {

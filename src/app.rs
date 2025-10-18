@@ -3,6 +3,7 @@ use ash::khr::surface;
 use ash::khr::swapchain;
 use ash::{Device, Entry, Instance, vk};
 use std::time::Instant;
+use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
 
 pub mod common;
@@ -39,28 +40,40 @@ impl VkCore {
 }
 
 pub struct VkSwap {
-	pub surface: Option<vk::SurfaceKHR>,
+	pub surface: vk::SurfaceKHR,
 	pub swapchain_ctx: SwapchainContext,
 }
 impl VkSwap {
-	pub fn new() {}
+	pub fn new(
+		window: &Window,
+		instance_ctx: &InstanceContext,
+		device_ctx: &DeviceContext,
+	) -> VkSwap {
+		let surface = unsafe {
+			ash_window::create_surface(
+				instance_ctx.entry(),
+				instance_ctx.instance(),
+				window.display_handle().unwrap().as_raw(),
+				window.window_handle().unwrap().as_raw(),
+				None,
+			)
+			.expect("Should have been able to create surface in create swapchain")
+		};
+		let swapchain_ctx = SwapchainContext::new(instance_ctx, device_ctx, window, surface);
+
+		VkSwap {
+			surface,
+			swapchain_ctx,
+		}
+	}
 }
 
 pub struct Application {
 	pub window: Option<Window>,
-
-	vk: Option<VkCore>,
-	vk_swapchain: Option<VkSwap>,
 	pub last_frame: Instant,
 
-	pub surface: Option<vk::SurfaceKHR>,
-
-	pub swapchain_device: Option<swapchain::Device>,
-	pub swapchain: Option<vk::SwapchainKHR>,
-	pub swapchain_format: Option<vk::Format>,
-	pub swapchain_extent: Option<vk::Extent2D>,
-	pub swapchain_imgs: Option<Vec<vk::Image>>,
-	pub swapchain_img_views: Option<Vec<vk::ImageView>>,
+	vk: Option<VkCore>,
+	vk_swap: Option<VkSwap>,
 }
 
 impl Application {
@@ -74,17 +87,9 @@ impl Application {
 		Application {
 			window: None,
 			vk: None,
-			vk_swapchain: None,
+			vk_swap: None,
 
 			last_frame: Instant::now(),
-
-			surface: None,
-			swapchain_device: None,
-			swapchain: None,
-			swapchain_format: None,
-			swapchain_extent: None,
-			swapchain_imgs: None,
-			swapchain_img_views: Some(Vec::new()), // not good
 		}
 	}
 	pub fn vk(&self) -> &VkCore {
@@ -93,12 +98,17 @@ impl Application {
 			.expect("VkCore should have been initialized")
 	}
 	pub fn vk_swap(&self) -> &VkSwap {
-		self.vk_swapchain
+		self.vk_swap
 			.as_ref()
 			.expect("VkSwap should have been initialized")
 	}
+
+	// theoretical game update method
 	pub fn update(&self, dt: f32) {}
 	pub fn draw_frame(&self) {}
+
+	// have a cleanup in Core and Swap respectively.
+	// Swap cleans every suspend signal, Core cleans on shutdown
 	pub fn cleanup(&mut self) {
 		// if let (Some(loader), Some(messenger)) = (&self.debug_utils_loader, self.debug_messenger) {
 		// 	unsafe { loader.destroy_debug_utils_messenger(messenger, None) };
