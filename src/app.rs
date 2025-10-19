@@ -37,6 +37,37 @@ impl VkCore {
 			pipeline_ctx,
 		}
 	}
+	pub fn cleanup(&self) {
+		// debug messenger
+		unsafe {
+			self.instance_ctx
+				.debug_utils_loader
+				.destroy_debug_utils_messenger(self.instance_ctx.debug_messenger, None);
+		}
+		// pipeline + pipeline layout
+		unsafe {
+			self.device_ctx
+				.device()
+				.destroy_pipeline_layout(self.pipeline_ctx.pipeline_layout, None);
+			self.device_ctx
+				.device()
+				.destroy_pipeline(self.pipeline_ctx.graphics_pipeline, None);
+		}
+		// cmd pool
+		unsafe {
+			self.device_ctx
+				.device()
+				.destroy_command_pool(self.pipeline_ctx.command_pool, None);
+		}
+		// device
+		unsafe {
+			self.device_ctx.device().destroy_device(None);
+		}
+		// instance
+		unsafe {
+			self.instance_ctx.instance().destroy_instance(None);
+		}
+	}
 }
 
 pub struct VkSwap {
@@ -64,6 +95,22 @@ impl VkSwap {
 		VkSwap {
 			surface,
 			swapchain_ctx,
+		}
+	}
+	pub fn cleanup(&self, surface_loader: &surface::Instance, device: &Device) {
+		unsafe {
+			self.swapchain_ctx
+				.swapchain_device
+				.destroy_swapchain(self.swapchain_ctx.swapchain, None);
+		}
+		unsafe {
+			surface_loader.destroy_surface(self.surface, None);
+		}
+		unsafe {
+			self.swapchain_ctx
+				.swapchain_imgs
+				.iter()
+				.for_each(|img| device.destroy_image(*img, None));
 		}
 	}
 }
@@ -106,31 +153,4 @@ impl Application {
 	// theoretical game update method
 	pub fn update(&self, dt: f32) {}
 	pub fn draw_frame(&self) {}
-
-	// have a cleanup in Core and Swap respectively.
-	// Swap cleans every suspend signal, Core cleans on shutdown
-	pub fn cleanup(&mut self) {
-		// if let (Some(loader), Some(messenger)) = (&self.debug_utils_loader, self.debug_messenger) {
-		// 	unsafe { loader.destroy_debug_utils_messenger(messenger, None) };
-		// }
-		// if let (Some(surface), Some(loader)) = (self.surface, &self.surface_loader) {
-		// 	unsafe { loader.destroy_surface(surface, None) };
-		// }
-		// if let (Some(swapchain), Some(swap_device)) = (self.swapchain, &self.swapchain_device) {
-		// 	unsafe { swap_device.destroy_swapchain(swapchain, None) };
-		// }
-		// if let Some(device) = &self.device {
-		// 	if let Some(images) = &self.swapchain_imgs {
-		// 		unsafe {
-		// 			images
-		// 				.iter()
-		// 				.for_each(|img| device.destroy_image(*img, None));
-		// 		}
-		// 	}
-		// 	unsafe { device.destroy_device(None) };
-		// }
-		// if let Some(instance) = &self.instance {
-		// 	unsafe { instance.destroy_instance(None) };
-		// }
-	}
 }

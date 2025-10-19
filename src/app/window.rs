@@ -31,7 +31,11 @@ impl ApplicationHandler for Application {
 		}
 	}
 	fn suspended(&mut self, event_loop: &ActiveEventLoop) {
-		// TODO: Cleanup non persistent vk objects (surface, imgs, swapchain) VkSwap
+		log::info!("Received suspend event, cleaning VkSwap");
+		self.vk_swap().cleanup(
+			self.vk().instance_ctx.surface_loader(),
+			self.vk().device_ctx.device(),
+		);
 	}
 	fn window_event(
 		&mut self,
@@ -41,7 +45,7 @@ impl ApplicationHandler for Application {
 	) {
 		match event {
 			WindowEvent::CloseRequested => {
-				self.cleanup();
+				self.vk().cleanup();
 				event_loop.exit();
 			}
 			WindowEvent::Resized(size) => { /* resize */ }
