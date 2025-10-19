@@ -65,7 +65,6 @@ impl SwapchainContext {
 		};
 
 		let format = SwapchainContext::choose_swap_format(&formats);
-		// TODO: Make this work with the assumed format used when constructing VkCore
 		let swapchain_format = format.format;
 		let swapchain_extent = SwapchainContext::choose_swap_extent(&capabilities, window);
 		let present_mode = SwapchainContext::choose_swap_present_mode(&present_modes);

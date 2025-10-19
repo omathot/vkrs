@@ -10,9 +10,9 @@ pub struct PipelineContext {
 }
 
 impl PipelineContext {
-	pub fn new(device_ctx: &DeviceContext) -> PipelineContext {
+	pub fn new(device_ctx: &DeviceContext, swap_format: vk::Format) -> PipelineContext {
 		let (pipeline_layout, graphics_pipeline) =
-			PipelineContext::create_graphics_pipeline(device_ctx.device());
+			PipelineContext::create_graphics_pipeline(device_ctx.device(), swap_format);
 		let command_pool =
 			PipelineContext::create_command_pool(device_ctx.device(), device_ctx.graphics_index);
 		let command_buff = PipelineContext::create_command_buff(device_ctx.device(), command_pool);
@@ -25,7 +25,10 @@ impl PipelineContext {
 		}
 	}
 
-	fn create_graphics_pipeline(device: &Device) -> (vk::PipelineLayout, vk::Pipeline) {
+	fn create_graphics_pipeline(
+		device: &Device,
+		swap_format: vk::Format,
+	) -> (vk::PipelineLayout, vk::Pipeline) {
 		// TODO: normalize path
 		let shader_code = include_bytes!("../../shaders/slang.spv");
 		debug_assert!(shader_code.len() > 0, "shader_code byte len <= 0");
@@ -112,10 +115,9 @@ impl PipelineContext {
 				.create_pipeline_layout(&pipeline_info, None)
 				.expect("Should have been able to create pipeline layout")
 		};
-		// TODO: find a way to not assume the color attachments formats. used to not when swapchain was created before graphics pipeline
 		let pipeline_rendering_info = vk::PipelineRenderingCreateInfo {
 			color_attachment_count: 1,
-			p_color_attachment_formats: &vk::Format::B8G8R8A8_SRGB,
+			p_color_attachment_formats: &swap_format,
 			..Default::default()
 		};
 		let pipeline_info = vk::GraphicsPipelineCreateInfo {

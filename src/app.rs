@@ -23,18 +23,15 @@ pub use swapchain_ctx::SwapchainContext;
 pub struct VkCore {
 	pub instance_ctx: InstanceContext,
 	pub device_ctx: DeviceContext,
-	pub pipeline_ctx: PipelineContext,
 }
 impl VkCore {
 	pub fn new(window: &Window) -> VkCore {
 		let instance_ctx = InstanceContext::new();
 		let device_ctx = DeviceContext::new(&instance_ctx, window);
-		let pipeline_ctx = PipelineContext::new(&device_ctx);
 
 		VkCore {
 			instance_ctx,
 			device_ctx,
-			pipeline_ctx,
 		}
 	}
 	pub fn cleanup(&self) {
@@ -43,21 +40,6 @@ impl VkCore {
 			self.instance_ctx
 				.debug_utils_loader
 				.destroy_debug_utils_messenger(self.instance_ctx.debug_messenger, None);
-		}
-		// pipeline + pipeline layout
-		unsafe {
-			self.device_ctx
-				.device()
-				.destroy_pipeline_layout(self.pipeline_ctx.pipeline_layout, None);
-			self.device_ctx
-				.device()
-				.destroy_pipeline(self.pipeline_ctx.graphics_pipeline, None);
-		}
-		// cmd pool
-		unsafe {
-			self.device_ctx
-				.device()
-				.destroy_command_pool(self.pipeline_ctx.command_pool, None);
 		}
 		// device
 		unsafe {
@@ -73,6 +55,7 @@ impl VkCore {
 pub struct VkSwap {
 	pub surface: vk::SurfaceKHR,
 	pub swapchain_ctx: SwapchainContext,
+	pub pipeline_ctx: PipelineContext,
 }
 impl VkSwap {
 	pub fn new(
@@ -91,26 +74,39 @@ impl VkSwap {
 			.expect("Should have been able to create surface in create swapchain")
 		};
 		let swapchain_ctx = SwapchainContext::new(instance_ctx, device_ctx, window, surface);
+		let pipeline_ctx = PipelineContext::new(&device_ctx, swapchain_ctx.swapchain_format);
 
 		VkSwap {
 			surface,
 			swapchain_ctx,
+			pipeline_ctx,
 		}
 	}
 	pub fn cleanup(&self, surface_loader: &surface::Instance, device: &Device) {
+		// views
+		unsafe {
+			self.swapchain_ctx
+				.swapchain_img_views
+				.iter()
+				.for_each(|view| device.destroy_image_view(*view, None));
+		}
+		// swap (destroys imgs)
 		unsafe {
 			self.swapchain_ctx
 				.swapchain_device
 				.destroy_swapchain(self.swapchain_ctx.swapchain, None);
 		}
+		// pipeline + pipeline layout
 		unsafe {
-			surface_loader.destroy_surface(self.surface, None);
+			device.destroy_pipeline_layout(self.pipeline_ctx.pipeline_layout, None);
+			device.destroy_pipeline(self.pipeline_ctx.graphics_pipeline, None);
+		}
+		// cmd pool
+		unsafe {
+			device.destroy_command_pool(self.pipeline_ctx.command_pool, None);
 		}
 		unsafe {
-			self.swapchain_ctx
-				.swapchain_imgs
-				.iter()
-				.for_each(|img| device.destroy_image(*img, None));
+			surface_loader.destroy_surface(self.surface, None);
 		}
 	}
 }
