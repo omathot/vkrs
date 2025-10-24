@@ -3,22 +3,25 @@ use ash::khr::surface;
 use ash::khr::swapchain;
 use ash::{Device, Entry, Instance, vk};
 use std::time::Instant;
-use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
 
 pub mod common;
 pub mod device_ctx;
+pub mod frame_data;
 pub mod init;
 pub mod instance_ctx;
 pub mod pipeline_ctx;
 pub mod swapchain_ctx;
 pub mod utils;
+pub mod vk_swap;
 pub mod window;
 pub use common::*;
 pub use device_ctx::DeviceContext;
+pub use frame_data::FrameData;
 pub use instance_ctx::InstanceContext;
 pub use pipeline_ctx::PipelineContext;
 pub use swapchain_ctx::SwapchainContext;
+pub use vk_swap::VkSwap;
 
 pub struct VkCore {
 	pub instance_ctx: InstanceContext,
@@ -48,65 +51,6 @@ impl VkCore {
 		// instance
 		unsafe {
 			self.instance_ctx.instance().destroy_instance(None);
-		}
-	}
-}
-
-pub struct VkSwap {
-	pub surface: vk::SurfaceKHR,
-	pub swapchain_ctx: SwapchainContext,
-	pub pipeline_ctx: PipelineContext,
-}
-impl VkSwap {
-	pub fn new(
-		window: &Window,
-		instance_ctx: &InstanceContext,
-		device_ctx: &DeviceContext,
-	) -> VkSwap {
-		let surface = unsafe {
-			ash_window::create_surface(
-				instance_ctx.entry(),
-				instance_ctx.instance(),
-				window.display_handle().unwrap().as_raw(),
-				window.window_handle().unwrap().as_raw(),
-				None,
-			)
-			.expect("Should have been able to create surface in create swapchain")
-		};
-		let swapchain_ctx = SwapchainContext::new(instance_ctx, device_ctx, window, surface);
-		let pipeline_ctx = PipelineContext::new(&device_ctx, swapchain_ctx.swapchain_format);
-
-		VkSwap {
-			surface,
-			swapchain_ctx,
-			pipeline_ctx,
-		}
-	}
-	pub fn cleanup(&self, surface_loader: &surface::Instance, device: &Device) {
-		// views
-		unsafe {
-			self.swapchain_ctx
-				.swapchain_img_views
-				.iter()
-				.for_each(|view| device.destroy_image_view(*view, None));
-		}
-		// swap (destroys imgs)
-		unsafe {
-			self.swapchain_ctx
-				.swapchain_device
-				.destroy_swapchain(self.swapchain_ctx.swapchain, None);
-		}
-		// pipeline + pipeline layout
-		unsafe {
-			device.destroy_pipeline_layout(self.pipeline_ctx.pipeline_layout, None);
-			device.destroy_pipeline(self.pipeline_ctx.graphics_pipeline, None);
-		}
-		// cmd pool
-		unsafe {
-			device.destroy_command_pool(self.pipeline_ctx.command_pool, None);
-		}
-		unsafe {
-			surface_loader.destroy_surface(self.surface, None);
 		}
 	}
 }
@@ -148,5 +92,20 @@ impl Application {
 
 	// theoretical game update method
 	pub fn update(&self, dt: f32) {}
-	pub fn draw_frame(&self) {}
+	pub fn draw_frame(&self) {
+		let curr_frame = self.vk_swap().current_frame;
+		let frame = &self
+			.vk_swap()
+			.frames
+			.get(curr_frame as usize)
+			.expect("curr_frame should index into a valid frame");
+		let swap_device = &self.vk_swap().swapchain_ctx.swapchain_device;
+		let swapchain = self.vk_swap().swapchain_ctx.swapchain;
+
+		// let (img_idx, res) = unsafe {
+		// 	swap_device
+		// 		.acquire_next_image(swapchain, u64::MAX, frame.img_available, vk::Fence::null())
+		// 		.expect("Should have been able to acquire next image")
+		// };
+	}
 }

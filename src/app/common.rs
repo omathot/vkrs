@@ -6,7 +6,7 @@ use std::ffi::{CStr, CString, c_char};
 pub static ENABLE_VALIDATION_LAYERS: bool = true;
 #[cfg(not(debug_assertions))]
 pub static ENABLE_VALIDATION_LAYERS: bool = false;
-pub static VALIDATION_LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
+pub static VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 
 #[cfg(target_os = "linux")]
 pub static REQUIRED_INSTANCE_EXTENSIONS: &[&CStr] =
@@ -29,6 +29,8 @@ pub static REQUIRED_DEVICE_EXTENSIONS: &[&CStr] = &[
 	#[cfg(target_os = "macos")]
 	vk::KHR_PORTABILITY_SUBSET_NAME,
 ];
+
+pub static FRAMES_IN_FLIGHT: usize = 2;
 
 // the only purpose of this struct is to keep the CString alive as long as the *const c_char
 // otherwise we have to juggle both to keep chars valid

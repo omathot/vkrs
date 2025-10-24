@@ -4,24 +4,16 @@ use std::ffi::c_void;
 pub struct PipelineContext {
 	pub pipeline_layout: vk::PipelineLayout,
 	pub graphics_pipeline: vk::Pipeline,
-
-	pub command_pool: vk::CommandPool, // manages the memory used to store buffers
-	pub command_buff: vk::CommandBuffer,
 }
 
 impl PipelineContext {
 	pub fn new(device_ctx: &DeviceContext, swap_format: vk::Format) -> PipelineContext {
 		let (pipeline_layout, graphics_pipeline) =
 			PipelineContext::create_graphics_pipeline(device_ctx.device(), swap_format);
-		let command_pool =
-			PipelineContext::create_command_pool(device_ctx.device(), device_ctx.graphics_index);
-		let command_buff = PipelineContext::create_command_buff(device_ctx.device(), command_pool);
 
 		PipelineContext {
 			pipeline_layout,
 			graphics_pipeline,
-			command_pool,
-			command_buff,
 		}
 	}
 
@@ -155,35 +147,5 @@ impl PipelineContext {
 				.create_shader_module(&create_info, None)
 				.expect("Should have been able to create shader module")
 		}
-	}
-
-	fn create_command_pool(device: &Device, graphics_idx: u32) -> vk::CommandPool {
-		let pool_info = vk::CommandPoolCreateInfo {
-			flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
-			queue_family_index: graphics_idx,
-			..Default::default()
-		};
-		let command_pool = unsafe {
-			device
-				.create_command_pool(&pool_info, None)
-				.expect("Should have been able to create command pool")
-		};
-
-		command_pool
-	}
-	fn create_command_buff(device: &Device, command_pool: vk::CommandPool) -> vk::CommandBuffer {
-		let alloc_info = vk::CommandBufferAllocateInfo {
-			command_pool: command_pool,
-			level: vk::CommandBufferLevel::PRIMARY,
-			command_buffer_count: 1,
-			..Default::default()
-		};
-		let command_buff = unsafe {
-			device
-				.allocate_command_buffers(&alloc_info)
-				.expect("Should have been able to allocate command buff")[0] // only creating one for now
-		};
-
-		command_buff
 	}
 }
