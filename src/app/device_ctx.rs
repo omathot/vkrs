@@ -1,6 +1,6 @@
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
-use super::{common::*, surface, vk, Device, Instance, InstanceContext, Window};
+use super::{Device, Instance, InstanceContext, Window, common::*, surface, vk};
 use std::ffi::{c_char, c_void};
 
 pub struct DeviceContext {
@@ -158,6 +158,10 @@ impl DeviceContext {
 			dynamic_rendering: vk::TRUE,
 			..Default::default()
 		};
+		let mut sync2_features = vk::PhysicalDeviceSynchronization2Features {
+			synchronization2: vk::TRUE,
+			..Default::default()
+		};
 		let mut extended_dynamic_state = vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT {
 			extended_dynamic_state: vk::TRUE,
 			..Default::default()
@@ -184,6 +188,7 @@ impl DeviceContext {
 		}
 		.push_next(&mut dynamic_rendering)
 		.push_next(&mut extended_dynamic_state)
+		.push_next(&mut sync2_features)
 		.push_next(&mut vk11_features)
 		.push_next(&mut vk12_features);
 

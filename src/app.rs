@@ -8,11 +8,10 @@ use winit::window::Window;
 pub mod common;
 pub mod device_ctx;
 pub mod frame_data;
-pub mod init;
+
 pub mod instance_ctx;
 pub mod pipeline_ctx;
 pub mod swapchain_ctx;
-pub mod utils;
 pub mod vk_swap;
 pub mod window;
 pub use common::*;
@@ -93,6 +92,7 @@ impl Application {
 	// theoretical game update method
 	pub fn update(&self, dt: f32) {}
 	pub fn draw_frame(&self) {
+		let device = self.vk().device_ctx.device();
 		let curr_frame = self.vk_swap().current_frame;
 		let frame = &self
 			.vk_swap()
@@ -102,10 +102,45 @@ impl Application {
 		let swap_device = &self.vk_swap().swapchain_ctx.swapchain_device;
 		let swapchain = self.vk_swap().swapchain_ctx.swapchain;
 
-		// let (img_idx, res) = unsafe {
-		// 	swap_device
-		// 		.acquire_next_image(swapchain, u64::MAX, frame.img_available, vk::Fence::null())
-		// 		.expect("Should have been able to acquire next image")
-		// };
+		let (img_idx, res) = unsafe {
+			swap_device
+				.acquire_next_image(swapchain, u64::MAX, frame.img_available, vk::Fence::null())
+				.expect("Should have been able to acquire next image")
+		};
+		self.vk_swap().record_command_buff(img_idx, device);
+
+		// reset fence
+		match unsafe { device.reset_fences(&[frame.draw_fence]) } {
+			Ok(()) => {}
+			Err(e) => panic!("Failed to wait for fence: {:?}", e),
+		};
+
+		let wait_dest_stage_mask = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
+		let submit_info = vk::SubmitInfo {
+			p_wait_dst_stage_mask: &wait_dest_stage_mask,
+			p_wait_semaphores: &frame.img_available,
+			p_command_buffers: &frame.cmd_buff,
+			p_signal_semaphores: &frame.render_finished,
+			..Default::default()
+		};
+		match unsafe {
+			device.queue_submit(
+				self.vk().device_ctx.graphics_queue,
+				&[submit_info],
+				frame.draw_fence,
+			)
+		} {
+			Ok(()) => {}
+			Err(e) => panic!("Failed to submit to queue: {:?}", e),
+		};
+
+		// loop until done waiting for fence
+		loop {
+			match unsafe { device.wait_for_fences(&[frame.draw_fence], true, u64::MAX) } {
+				Ok(()) => break,
+				Err(vk::Result::TIMEOUT) => continue,
+				Err(e) => panic!("Failed to wait for fence {:?}", e),
+			}
+		}
 	}
 }
