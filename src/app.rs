@@ -101,6 +101,10 @@ impl Application {
 			.expect("curr_frame should index into a valid frame");
 		let swap_device = &self.vk_swap().swapchain_ctx.swapchain_device;
 		let swapchain = self.vk_swap().swapchain_ctx.swapchain;
+		let queue = self.vk().device_ctx.graphics_queue;
+		unsafe {
+			let _ = device.queue_wait_idle(queue);
+		};
 
 		let (img_idx, res) = unsafe {
 			swap_device
@@ -119,17 +123,13 @@ impl Application {
 		let submit_info = vk::SubmitInfo {
 			p_wait_dst_stage_mask: &wait_dest_stage_mask,
 			p_wait_semaphores: &frame.img_available,
+			wait_semaphore_count: 1,
 			p_command_buffers: &frame.cmd_buff,
 			p_signal_semaphores: &frame.render_finished,
+			signal_semaphore_count: 1,
 			..Default::default()
 		};
-		match unsafe {
-			device.queue_submit(
-				self.vk().device_ctx.graphics_queue,
-				&[submit_info],
-				frame.draw_fence,
-			)
-		} {
+		match unsafe { device.queue_submit(queue, &[submit_info], frame.draw_fence) } {
 			Ok(()) => {}
 			Err(e) => panic!("Failed to submit to queue: {:?}", e),
 		};
@@ -142,5 +142,28 @@ impl Application {
 				Err(e) => panic!("Failed to wait for fence {:?}", e),
 			}
 		}
+
+		let present_info_khr = vk::PresentInfoKHR {
+			wait_semaphore_count: 1,
+			p_wait_semaphores: &frame.render_finished,
+			swapchain_count: 1,
+			p_swapchains: &swapchain,
+			p_image_indices: &img_idx,
+			..Default::default()
+		};
+		let result = unsafe { swap_device.queue_present(queue, &present_info_khr) };
+		match result {
+			Ok(subobtimal) => {
+				if subobtimal {
+					log::info!("suboptimal swapchain");
+				}
+			}
+			Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+				// window-resized
+				// recreate_swapchain
+			}
+			Err(vk::Result::SUBOPTIMAL_KHR) => {}
+			Err(e) => panic!("Failed to present: {:?}", e),
+		};
 	}
 }

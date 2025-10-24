@@ -45,6 +45,10 @@ impl ApplicationHandler for Application {
 	) {
 		match event {
 			WindowEvent::CloseRequested => {
+				self.vk_swap().cleanup(
+					self.vk().instance_ctx.surface_loader(),
+					self.vk().device_ctx.device(),
+				);
 				self.vk().cleanup();
 				event_loop.exit();
 			}
