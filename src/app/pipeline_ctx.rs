@@ -133,6 +133,8 @@ impl PipelineContext {
 				.expect("Should have been able to greate graphics pipeline")[0] // only creating one for now
 		};
 
+		unsafe { device.destroy_shader_module(shader_module, None) };
+
 		(pipeline_layout, graphics_pipeline)
 	}
 
